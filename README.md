@@ -28,26 +28,38 @@ What we're looking for is something that is larger than all the finite numbers, 
 
 As it turns out, in transfinite land, we must differentiate ordinals and cardinals. Ordinals are the order of things, like using the number 4 to say something is 4th in line. Cardinals are the size of things, like using the number 4 to say there are 4 things in a bag. The size of the natural numbers we call aleph 0. The order of the natural numbers we call omega (ω).
 
-The first ordinal number ω is where the fun begins. By definition, it is the smallest limit ordinal, as the ordinal that comes after *1, 2, 3, 4, ...*, or rather, that sequence itself, using each number *N* being equivalent to *1, 2, 3, ..., N*. ω is *1, 2, 3, 4, ...*, through all the natural numbers. What is ω-1? It's not defined. If it were defined, it would be a smaller limit ordinal, and that contradicts our definition.
+To help us understand ordinals, we'll need to grasp the concept of an order type. As the name suggests, an order type describes ordering. For any natural number *N*, this is the finite sequence *1 < 2 < 3 < ... < N*. Notice, it has a start and an end, and contains *N* elements. For ω, this is instead the natural numbers: *1 < 2 < 3 < ...*. Notice, it has a start but no end, and its size is not finite. We will say 2 order types are equivalent if we can relabel one and get the same properties of the other.
 
-Here is where the commutativity of addition breaks.
+We can start with perhaps one of the most basic operations: addition. Addition of ordinals means to concatenate their order types.
 
-What is commutativity? It means you can change the order of operands and the result is the same.
+As an example, we will show that 2+5 = 7 = 5+2.
 
-For natural numbers, addition is commutative. Let us demonstrate that 2+5 and 5+2 both get 7.
+```
+2 + 5 = 1  < 2  < 1' < 2' < 3' < 4' < 5'
+    7 = 1  < 2  < 3  < 4  < 5  < 6  < 7
+5 + 2 = 1  < 2  < 3  < 4  < 5  < 1' < 2'
+```
 
-2+5: *1, 2, 1', 2', 3', 4', 5'* which looks like *1, 2, 3, 4, 5, 6, 7* which is 7.
+In fact, addition is commutative in the natural numbers, meaning you can always change the order and the result never changes.
 
-5+2: *1, 2, 3, 4, 5, 1', 2'* which looks like *1, 2, 3, 4, 5, 6, 7* which is 7.
+The first strangeness comes at ω. Let us see that 3+ω = ω. This sounds strange indeed, so we should take the time to see why.
 
-Now, let us try with ω+3 and 3+ω.
+```
+3 + ω = 1  < 2  < 3  < 1' < 2' < 3' < 4' < 5' < ...
+    ω = 1  < 2  < 3  < 4  < 5  < 6  < 7  < 8  < ...
+```
 
-ω+3: *1, 2, 3, ..., 1', 2', 3'*
+Relabeling aside, we can see from the properties that 3+ω = ω. Notice that both sequences have a start but no end, and their size is not finite.
 
-3+ω: *1, 2, 3, 1', 2', 3', ...* which looks like *1, 2, 3, 4, 5, 6, ...* which is ω.
+It gets stranger. ω+3 is not the same as ω.
 
-So 3+ω = ω but ω+3 is not ω.
+```
+ω + 3 = 1  < 2  < 3  < 4  < 5  < 6  < 7  < 8  < ... < 1' < 2' < 3'
+    ω = 1  < 2  < 3  < 4  < 5  < 6  < 7  < 8  < ...
+```
 
-It helps to take a moment to understand more precisely what "looks like" means. After all, on the surface they seem to be the same size. Let us think about successors. The successor of 0 is the number after 0, or 1. The successor of 1 is 2. And so on. Every finite number is either 0 or a successor of a smaller number. In reverse, we may think of predecessors. In the expansion of 3+ω, the predecessor of 1' is clearly defined as 3. In fact, there are 3 numbers behind 1'. The 3 can be eaten up by the ω in a sense. Meanwhile, in the expansion of ω+3, we don't have a well defined predecessor for 1', we can only say the entire expansion of ω is behind 1'. So we have no choice but to leave both the ω and 3 intact, and write ω+3.
+We know all those natural numbers would come before 1'. What comes directly before 1' though? What is the previous item? It would be the largest natural number, which is not defined. Thus there is no item directly before 1'. Also interestingly, this sequence ω+3 has an end: there is nothing after 3'.
+
+And so, when transfinite ordinals are involved, addition is no longer commutative.
 
 For multiplication, exponentiation, and other interesting things you can do with transfinite ordinals, go explore on your own. There are plenty of resources online.
