@@ -5,6 +5,7 @@ Warning: the math here has not been verified by a math expert.
 
 import warnings
 import numbers
+import functools
 
 class _omega_t(object):
     """
@@ -151,25 +152,80 @@ class ordinal(object):
     def __neg__(self):
         warnings.warn('Negative ordinal numbers are, in general, not well defined. Arithmetic assuming non-negative or strictly positive ordinals may behave strangely.')
         return ordinal([(p, -c) for p,c in self.cnf])
+    @staticmethod
+    def sum_cnf(*cnfs):
+        def iadd_cnf(rcnf, ocnf):
+            # rule: anything plus 0 is left argument
+            if not ocnf:return rcnf
+            # separate out first (largest) term of right hand side
+            ofirst, *ocnf = ocnf
+            # rule: smallert left parts are erased
+            while rcnf and rcnf[-1][0] < ofirst[0]:
+                del rcnf[-1]
+            # rule: same size left part is combined
+            if rcnf and rcnf[-1][0] == ofirst[0]:
+                rcnf[-1] = (ofirst[0], rcnf[-1][1] + ofirst[1])
+            else:
+                rcnf.append(ofirst)
+            # now irreducible
+            rcnf += ocnf
+            return rcnf
+        return functools.reduce(iadd_cnf, cnfs, [])
     def __add__(self, other):
         """
         Sum of 2 ordinal numbers.
         Note that, in general, addition is not commutative.
-        As an easy way to remember: small parts of the left operand are erased.
+        To summarize the substitution rules:
+        when the right side exponent is larger than the left, the left is erased.
         """
+        return ordinal(ordinal.sum_cnf(
+            self.cnf,
+            to_ordinal(other).cnf
+            ))
+    def __mul__(self, other):
+        """
+        Product of 2 ordinal numbers.
+        Note that, in general, multiplication is not commutative.
+        To summarize the substitution rules:
+        when the right side is a limit ordinal,
+        left side smaller parts get erased,
+        then left distribute.
+        """
+        scnf = self.cnf
+        # rule: 0 times anything is 0
+        if not scnf:return 0
+        # rule: anything times 0 is 0
+        if other == 0:return 0
+        # rule: anything times 1 is left argument
+        if other == 1:return self
         ocnf = to_ordinal(other).cnf
-        # if other is blank, then we are done
-        if not ocnf:return self
-        rcnf = list(self.cnf)
-        ofirst, *ocnf = ocnf
-        # erase small parts
-        while rcnf and rcnf[-1][0] < ofirst[0]:
-            del rcnf[-1]
-        # possibly combine first
-        if rcnf and rcnf[-1][0] == ofirst[0]:
-            rcnf[-1] = (ofirst[0], rcnf[-1][1] + ofirst[1])
-        else:
-            rcnf.append(ofirst)
-        # attach the rest
-        rcnf += list(ocnf)
+        # if left argument is a natural number
+        if scnf[0][0] == 0:
+            # non-limit ordinals multiply as usual
+            if ocnf[0][0] == 0:return scnf[0][1] * ocnf[0][1]
+            # rule: natural number times limit ordinal is right argument
+            return other
+        # left argument is a limit ordinal
+        # if right argument is a natural number
+        if ocnf[0][0] == 0:
+            rcnf = list(scnf)
+            rcnf[0] = (rcnf[0][0], rcnf[0][1] * ocnf[0][1])
+            return ordinal(rcnf)
+        # right argument is a limit ordinal
+        # left argument smaller parts are erased, only first term matters
+        p, n = scnf[0]
+        rcnf = []
+        # left distribute
+        for q, m in ocnf:
+            # earlier rule again:
+            # if right argument is limit ordinal and left argument is natural number,
+            # result is left argument
+            if q != 0:
+                m = n * m
+            # exponents are added
+            # addition is strictly increasing in the right argument,
+            # so this q is guaranteed to be less than the previous q
+            q = p + q
+            # just add the term
+            rcnf.append((q, m))
         return ordinal(rcnf)
