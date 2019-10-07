@@ -38,6 +38,9 @@ class _omega_t(object):
     def __add__(self, other):
         return to_ordinal(self) + other
     def __radd__(self, other):
+        # shortcut: left argument is natural number,
+        # result is omega
+        if other < self:return self
         return to_ordinal(other) + self
     def __sub__(self, other):
         return to_ordinal(self) - other
@@ -48,7 +51,8 @@ class _omega_t(object):
     def __rmul__(self, other):
         return to_ordinal(other) * self
     def __pow__(self, other):
-        return to_ordinal(self) ** other
+        # shortcut: derive CNF directly
+        return ordinal([(other, 1)])
     def __rpow__(self, other):
         return to_ordinal(other) ** self
     
@@ -80,6 +84,8 @@ class ordinal(object):
         elif value in (omega, 'omega'):
             self.cnf = [(1, 1)]
         elif isinstance(value, int):
+            if value < 0:
+                warnings.warn('Negative value being used to construct an ordinal.\nNegative ordinal numbers are, in general, not well defined. Arithmetic assuming non-negative or strictly positive ordinals may behave strangely.')
             self.cnf = [(0, value)]
         elif isinstance(value, tuple) and len(value) == 2 and isinstance(value[1], int):
             self.cnf = [value]
