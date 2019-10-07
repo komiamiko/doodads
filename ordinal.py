@@ -188,6 +188,8 @@ class ordinal(object):
             self.cnf,
             to_ordinal(other).cnf
             ))
+    def __radd__(self, other):
+        return to_ordinal(other) + self
     def __mul__(self, other):
         """
         Product of 2 ordinal numbers.
@@ -235,3 +237,5 @@ class ordinal(object):
             # just add the term
             rcnf.append((q, m))
         return ordinal(rcnf)
+    def __rmul__(self, other):
+        return to_ordinal(other) * self

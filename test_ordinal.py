@@ -248,6 +248,47 @@ class TestOrdinalClass(unittest.TestCase):
         self.assertEqual(1 + omega, omega)
         self.assertEqual(omega + omega, omega * 2)
         self.assertEqual((omega + 2) * (omega + 3), omega * omega + omega * 3)
+    def test_multiply_mid(self):
+        operands = [
+            ordinal([(6, 8), (5, 7), (3, 6), (0, 5)]),
+            ordinal([(ordinal([(1, 1), (0, 2)]), 3), (0, 4)]),
+            ordinal([(ordinal([(1, 1), (0, 4)]), 3), (0, 2)])
+            ]
+        results = [
+            [(12, 8), (11, 7), (9, 6), (6, 40)],
+            [(ordinal([(1, 1), (0, 2)]), 3), (6, 32)],
+            [(ordinal([(1, 1), (0, 4)]), 3), (6, 16)],
+            [
+                (ordinal([(1, 1), (0, 8)]), 8),
+                (ordinal([(1, 1), (0, 7)]), 7),
+                (ordinal([(1, 1), (0, 5)]), 6),
+                (ordinal([(1, 1), (0, 2)]), 15)
+                ],
+            [
+                (ordinal([(1, 2), (0, 2)]), 3),
+                (ordinal([(1, 1), (0, 2)]), 12)
+                ],
+            [
+                (ordinal([(1, 2), (0, 4)]), 3),
+                (ordinal([(1, 1), (0, 2)]), 6)
+                ],
+            [
+                (ordinal([(1, 1), (0, 10)]), 8),
+                (ordinal([(1, 1), (0, 9)]), 7),
+                (ordinal([(1, 1), (0, 7)]), 6),
+                (ordinal([(1, 1), (0, 4)]), 15)
+                ],
+            [
+                (ordinal([(1, 2), (0, 2)]), 3),
+                (ordinal([(1, 1), (0, 4)]), 12)
+                ],
+            [
+                (ordinal([(1, 2), (0, 4)]), 3),
+                (ordinal([(1, 1), (0, 4)]), 6)
+                ]
+            ]
+        for (a,b),r in zip(itertools.product(*[operands]*2), results):
+            self.assertEqual(r, ordinal(a * b).cnf)
 
 if __name__ == '__main__':
     unittest.main()
