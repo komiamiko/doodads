@@ -176,7 +176,7 @@ class TestOrdinalClass(unittest.TestCase):
             [(2, 18)]
             ]
         for (a,b),r in zip(itertools.product(*[operands]*2), results):
-            self.assertEqual(r, (a + b).cnf)
+            self.assertEqual(r, ordinal(a + b).cnf)
     def test_add_large(self):
         small = 2**8191-1
         big = ordinal([(2, 1), (1, 2)])
@@ -206,7 +206,44 @@ class TestOrdinalClass(unittest.TestCase):
             [(huge, 8), (big, 3), (0, 6)]
             ]
         for (a,b),r in zip(itertools.product(*[operands]*2), results):
-            self.assertEqual(r, (a + b).cnf)
+            self.assertEqual(r, ordinal(a + b).cnf)
+    def test_multiply_basic(self):
+        operands = [
+            ordinal([]), # 0
+            ordinal([(0, 1)]), # 1
+            ordinal([(0, 4)]), # 4
+            ordinal([(1, 1)]), # omega
+            ordinal([(2, 9)]), # omega**2 * 9
+            ]
+        results = [
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [(0, 1)],
+            [(0, 4)],
+            [(1, 1)],
+            [(2, 9)],
+            [],
+            [(0, 4)],
+            [(0, 16)],
+            [(1, 1)],
+            [(2, 9)],
+            [],
+            [(1, 1)],
+            [(1, 4)],
+            [(2, 1)],
+            [(3, 9)],
+            [],
+            [(2, 9)],
+            [(2, 36)],
+            [(3, 1)],
+            [(4, 9)]
+            ]
+        for (a,b),r in zip(itertools.product(*[operands]*2), results):
+            self.assertEqual(r, ordinal(a * b).cnf)
     def test_arithmetic_expr(self):
         self.assertEqual(1 + omega, omega)
         self.assertEqual(omega + omega, omega * 2)

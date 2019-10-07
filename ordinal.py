@@ -225,8 +225,8 @@ class ordinal(object):
         for q, m in ocnf:
             # earlier rule again:
             # if right argument is limit ordinal and left argument is natural number,
-            # result is left argument
-            if q != 0:
+            # result is right argument
+            if q == 0:
                 m = n * m
             # exponents are added
             # addition is strictly increasing in the right argument,
