@@ -11,13 +11,19 @@ class _omega_t(object):
     """
     Type of the internally used omega object.
     """
+    def __init__(self):
+        self.cnf = [(1, 1)]
+        # tier is a shortcut used to speed up comparisons
+        self._tier = 1
     def __eq__(self, other):
-        return isinstance(other, _omega_t)
+        if isinstance(other, numbers.Real):return False
+        if isinstance(other, _omega_t):return True
+        if hasattr(other, 'cnf') and other.cnf == [(1, 1)]:return True
+        return False
     def __ne__(self, other):
         return not (self == other)
     def __lt__(self, other):
-        if isinstance(other, (numbers.Real, _omega_t)):
-            return False
+        if isinstance(other, (numbers.Real, _omega_t)):return False
         return other > self
     def __le__(self, other):
         return self == other or self < other
@@ -58,6 +64,17 @@ class _omega_t(object):
     
 # the canonical omega object
 omega = _omega_t()
+
+def _ordinal_tier(a):
+    """
+    Returns the "tier" of a.
+    Bigger ordinals have higher tier.
+    This is used to speed up comparison by seeing when an ordinal is vastly larger than another.
+    As currently implemented, this reflects the height of the leading term of the CNF.
+    """
+    if isinstance(a, numbers.Real):
+        return 0
+    return a._tier
 
 def to_ordinal(n):
     """
@@ -115,13 +132,28 @@ class ordinal(object):
             self.cnf = value
         else:
             raise ValueError(f'Could not build an ordinal out of object: {value}')
+        # compute tier, which will be used to speed up comparisons
+        scnf = self.cnf
+        if not scnf or scnf[0][0] == 0:
+            self._tier = 0
+        else:
+            high_tier = _ordinal_tier(scnf[0][0])
+            self._tier = high_tier + 1
     def __eq__(self, other):
+        otier = _ordinal_tier(other)
+        if self._tier != otier:return False
         return self.cnf == to_ordinal(other).cnf
     def __ne__(self, other):
         return not (self == other)
     def __lt__(self, other):
+        otier = _ordinal_tier(other)
+        if self._tier < otier:return True
+        if self._tier > otier:return False
         return self.cnf < to_ordinal(other).cnf
     def __le__(self, other):
+        otier = _ordinal_tier(other)
+        if self._tier < otier:return True
+        if self._tier > otier:return False
         return self.cnf <= to_ordinal(other).cnf
     def __gt__(self, other):
         return not (self <= other)
