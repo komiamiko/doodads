@@ -129,6 +129,12 @@ class ordinal(object):
         return not (self < other)
     def __hash__(self):
         return hash((ordinal,) + tuple(self.cnf))
+    def __int__(self):
+        scnf = self.cnf
+        if not scnf:return 0
+        if scnf[0][0] != 0:
+            raise TypeError('This ordinal object is not a natural number, and cannot be converted to an integer object')
+        return scnf[0][1]
     def __str__(self):
         scnf = self.cnf
         if not scnf:return '0'
@@ -239,3 +245,57 @@ class ordinal(object):
         return ordinal(rcnf)
     def __rmul__(self, other):
         return to_ordinal(other) * self
+    def __pow__(self, other):
+        """
+        Power of 2 ordinal numbers.
+        To summarize the substitution rules:
+        natural number to omega times something is omega to that something,
+        right side limit ordinal causes only left largest power to be preserved,
+        right side successor is similar but keep left coefficient and do exponent with one less and then multiply by the left side.
+        """
+        # rule: anything to 0 is 1
+        if other == 0:return 1
+        # rule: anything to 1 is itself
+        if other == 1:return self
+        scnf = self.cnf
+        # rule: 0 to anything is 0
+        if not scnf:return 0
+        if scnf[0][0] == 0:
+            s = int(self)
+            # apply rules for natural number to something
+            if other < omega:
+                # shortcut rule: natural numbers only do power like normal
+                return s ** int(other)
+            # other is not natural number
+            rcnf, n = list(to_ordinal(other).cnf), 1
+            # natural number term needs special treatment
+            if rcnf[-1][0] == 0:
+                n = s ** rcnf[-1][1]
+                del rcnf[-1]
+            # bump inner exponents down by 1
+            for i in range(len(rcnf)):
+                r = rcnf[i]
+                r = (-1 + r[0], r[1])
+                rcnf[i] = r
+                # note we use a special case of subtraction
+                # we already accounted for 0 separately
+                # otherwise, either it is a natural number greater than 0 so it stays greater than or equal to 0
+                # or it is at least omega so the -1 will be eaten harmlessly
+                # this behaviour is exactly as the rule says, which is, given X, return Y, where X = 1 + Y
+            p = ordinal(rcnf)
+            return ordinal([(p, n)])
+        else:
+            # apply rules for not natural number to something
+            p, m = scnf[0]
+            rcnf = list(to_ordinal(other).cnf)
+            bump = rcnf[-1][0] == 0 and rcnf[-1][1] > 0
+            if bump:
+                # rule: when right is successor, do exponent with its predecessor on the largest term in left side, then multiply by left
+                r = rcnf[-1]
+                rcnf[-1] = (r[0], r[1] - 1)
+                return ordinal([(p * ordinal(rcnf), m)]) * self
+            else:
+                # rule: when right is limit, do exponent on largest term in left side and erase the coefficient
+                return ordinal([(p * ordinal(rcnf), 1)])
+    def __rpow__(self, other):
+        return to_ordinal(other) ** self
