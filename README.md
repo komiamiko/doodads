@@ -1,6 +1,11 @@
 # transfinite
 Small library for working with ordinals and transfinite numbers.
 
+A Section Which Will Be Removed Later
+---
+
+As promised, we are working on a version with a unified ordinal class! That's the purpose of this branch. It will be merged into the master branch when it is ready.
+
 Background
 ---
 
