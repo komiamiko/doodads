@@ -2,6 +2,8 @@
 Unit tests for the ordinal library.
 """
 
+# test file will need rewriting after the unified ordinal class is ready
+
 from ordinal import _omega_t, omega, ordinal
 import itertools
 import warnings

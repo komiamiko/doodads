@@ -331,3 +331,283 @@ class ordinal(object):
                 return ordinal([(p * ordinal(rcnf), 1)])
     def __rpow__(self, other):
         return to_ordinal(other) ** self
+
+# above: old implementation
+# below: unified ordinal class implementation
+
+import warnings
+import numbers
+import abc
+import operator
+
+def bin_log(x):
+    """
+    Base 2 floor logarithm for integers.
+    """
+    return len(bin(x)) - 3
+
+def reduce_bisected(func, iterable, nothing=0):
+    """
+    Like reduce from functools.
+    Produces the same results if the operator is associative.
+    Uses a combining order like a perfect binary tree, so like
+      ((a + b) + (c + d)) + e
+      rather than
+      (((a + b) + c) + d) + e
+    For joining objects that accumulate size like lists, this achieves
+      O(N log N) rather than O(N^2)
+      which is an improvement.
+    The sum of nothing is 0, or whatever else is supplied.
+    """
+    iterator = iter(iterable)
+    try:
+        build = [next(iterator)]
+    except StopIteration:
+        return nothing
+    for i, v in enumerate(iterator):
+        i += 2
+        build.append(v)
+        while not i & 1:
+            i >>= 1
+            rhs = build.pop()
+            lhs = build[-1]
+            build[-1] = func(lhs, rhs)
+    while len(build) > 1:
+        rhs = build.pop()
+        lhs = build[-1]
+        build[-1] = func(lhs, rhs)
+    return build[0]
+
+def sum_bisected(iterable):
+    return reduce_bisected(operator.add, iterable)
+
+class _named_const(object):
+    """
+    Represents a named constant value with no relation to anything else.
+    All it does it patch str and repr to return the desired values.
+    """
+    def __init__(self, _str, _repr):
+        self._str = _str
+        self._repr = _repr
+    def __str__(self, name):
+        return self._str
+    def __repr__(self, name):
+        return self._repr
+
+class ordinal_type(abc.ABC):
+    """
+    Represents an ordinal number in the mathematical sense.
+    Natural numbers are included, and will be instances of this class, as expected.
+    Note that this does not contain any useful methods -
+    please use the static functions to work with ordinals instead.
+    """
+    
+ordinal_type.register(int)
+
+# Every ordinal is either zero, a successor ordinal, or a limit ordinal.
+# I could not find any standard notation for these sets, so I
+#   made names for them that I think are short and simple. 
+kind_zero = _named_const("0", "kind_zero")
+kind_successor = _named_const("(x+1)", "kind_successor")
+kind_limit = _named_const("(\\lim)", "kind_limit")
+
+def kind(value):
+    """
+    What kind of ordinal is it?
+    Returns 1 of these 3:
+    - kind_zero (for zero)
+    - kind_successor (if there exists a well defined x such that value is x + 1)
+    - kind_limit (everything else)
+    Every ordinal number is in one of these categories.
+    
+    Inputs which are not ordinals will, in general, fail,
+    and this function will try to check for bad input, however,
+    this function does not guarantee that a non-ordinal input will cause
+    an error. Whatever value is returned is useless.
+    """
+    if isinstance(value, numbers.Real):
+        int_value = int(value)
+        if int_value == value:
+            if value == 0:
+                return kind_zero
+            elif value < 0:
+                raise ValueError('Negative numbers are not ordinals.')
+            else:
+                return kind_successor
+        raise ValueError('Non-integer numbers are not ordinals.')
+    if isinstance(value, ordinal):
+        return value._kind
+    raise ValueError('Value is not of a known type representing a mathematical ordinal.')
+
+def tier(value):
+    """
+    A special function of ordinals which does not
+      correspond to any mathematically useful function.
+    Maps ordinals to small objects, effectively compressing the range.
+    Used to speed up comparisons when the operands are very different sizes.
+
+    In the current version, this is a map from ordinals to 2-tuples of integers,
+      however, this is subject to change at any time, so please do not retain
+      long lived records of what tier an ordinal number is.
+    """
+    if isinstance(value, numbers.Real):
+        value = ordinal(value)
+    if isinstance(value, ordinal):
+        return value._tier
+    raise ValueError('Value is not of a known type representing a mathematical ordinal.')
+
+class ordinal(ordinal_type):
+    """
+    Programmatic implementation of ordinal numbers.
+    Treat them like immutable objects.
+    Works by separating the ordinal into additive pieces, and
+      arranging those pieces into the smallest hierarchy that contains it.
+    Current hierarchies are the ordinals up to
+      omega, epsilon_0, gamma_0 (Feferman–Schütte ordinal)
+      represented by the
+      natural numbers, Cantor normal form, Veblen normal form
+      respectively.
+    This means it is theoretically possible, using this class,
+      to represent all ordinals up to but not including gamma_0
+      using this class.
+    All ordinal operations in this module are implemented by this class,
+      but it is recommended to use the regular operator symbols
+      and static utility functions
+      rather than call the methods directly.
+    """
+    def __init__(self, value=None, name=None, _nat=None, _cnf=None, _vnf=None, copy=False):
+        """
+        Ordinal constructor.
+        Simple usage is to hand it some value and let it take care of the conversion.
+        If given an ordinal, prefers to not make copies of objects,
+          unless the flag is set to True, then it makes a shallow copy.
+        Detailed construction parameters are meant for internal use,
+          and invariants will not be checked.
+        """
+        # Try to construct from value - how it is usually used by a user
+        if value is not None:
+            if isinstance(value, str):
+                self.__init__(name = value)
+                return
+            if isinstance(value, int):
+                if value < 0:
+                    raise ValueError('Integer ordinal cannot be negative')
+                self.__init__(_nat = value)
+                return
+            if isinstance(value, ordinal):
+                _nat = value._nat
+                _cnf = value._cnf
+                _vnf = value._vnf
+                if copy:
+                    _cnf = list(_cnf)
+                    _vnf = list(_vnf)
+                self.__init__(_nat = _nat, _cnf = _cnf, _vnf = _vnf)
+        # Is this a specific named ordinal?
+        if name in _omega_aliases:
+            self.__init__(_cnf = [(1, 1)])
+            return
+        if name in _epsilon_0_aliases:
+            self.__init__(_vnf = [(1, 0)])
+            return
+        if name in _zeta_0_aliases:
+            self.__init__(_vnf = [(2, 0)])
+            return
+        if name is not None:
+            raise ValueError('Named ordinal unknown')
+        # Use the internal representation
+        if _nat is None:
+            _nat = 0
+        if _cnf is None:
+            _cnf = []
+        if _vnf is None:
+            _vnf = []
+        self._nat = _nat
+        self._cnf = _cnf
+        self._vnf = _vnf
+        # Precompute the hash
+        self._hash = hash((ordinal, self._nat) + tuple(self._cnf) + tuple(self._vnf))
+        # Precompute the kind
+        if self._nat == 0:
+            if self._cnf or self._vnf:
+                self._kind = kind_limit
+            else:
+                self._kind = kind_zero
+        else:
+            self._kind = kind_successor
+        # Precompute the tier
+        if self._vnf:
+            _tier = tier(self._vnf[0][0])
+            _tier = (_tier[0] + 2, _tier[1])
+        elif self._cnf:
+            _tier = tier(self._cnf[0][0])
+            _tier = (1, _tier[0])
+        else:
+            _tier = (0, binlog(self._nat))
+        self._tier = _tier
+    def __hash__(self):
+        return self._hash
+    def __str__(self):
+        bits = []
+        for s, i in self._vnf:
+            bit = '{\\phi_' + str(s) + '(' + str(i) + ')}'
+        for p, c in self._cnf:
+            bit = '\\omega'
+            if p != 1:
+                bit = '{' + bit + '}^{' + str(p) + '}'
+            if c != 1:
+                bit = bit + ' \\cdot ' + str(c)
+            bits.append(bit)
+        if self._nat:
+            bits.append(str(self._nat))
+        if not bits:
+            return '0'
+        return '{' + ' + '.join(bits) + '}'
+    def __repr__(self):
+        return 'ordinal(_nat = ' + repr(self._nat) + ', _cnf = ' + repr(self._cnf) + ', _vnf = ' + repr(self._vnf) + ')'
+    def __eq__(self, other):
+        if self is other:
+            return True
+        if isinstance(other, numbers.Real):
+            if self._cnf or self._vnf:
+                return False
+            return self._nat = other
+        if not isinstance(other, ordinal):
+            return False
+        if hash(self) != hash(other):return False
+        if self._tier != other._tier:return False
+        return self._vnf == other._vnf and self._cnf == other._cnf and self._nat == other._nat
+    def __ne__(self, other):
+        return not self == other
+    def __lt__(self, other):
+        
+
+def veblen(sub, value):
+    """
+    Computes phi_sub(value) where phi is the Veblen function.
+    In summary,
+    - phi_0(x) = omega^x
+    - phi_y(0) is the smallest ordinal z such that for all
+        w < y, phi_w(z) = z
+    - phi_y(x+1) is the smallest ordinal z greater than phi_y(x)
+        and such that for all
+        w < y, phi_w(z) = z
+    As an example, phi_1(0) = epsilon_0 which is the first
+      fixed point of x = omega^x.
+    For more of the mathematical fine details
+      and to see how the Veblen function handles transfinite arguments,
+      do your own research.
+    A full explanation will not fit nicely in this doc comment.
+    """
+    if sub == 0:
+        if value == 0:
+            return 1
+        return ordinal(_cnf = [(value, 1)])
+    return ordinal(_vnf = [(sub, value)])
+
+_omega_aliases = {'omega','w','\\omega'}
+_epsilon_0_aliases = {'epsilon_0','epsilon0','eps_0','eps0','e_0','e0','\\epsilon_0'}
+_zeta_0_aliases = {'zeta_0','zeta0','z_0','z0','\\zeta_0'}
+
+omega = ordinal('omega')
+epsilon_0 = ordinal('epsilon_0')
+zeta_0 = ordinal('zeta_0')
