@@ -335,10 +335,11 @@ class ordinal(object):
 # above: old implementation
 # below: unified ordinal class implementation
 
-import warnings
-import numbers
 import abc
+import itertools
+import numbers
 import operator
+import warnings
 
 def bin_log(x):
     """
@@ -507,14 +508,17 @@ class ordinal(ordinal_type):
             self.__init__(_cnf = [(1, 1)])
             return
         if name in _epsilon_0_aliases:
-            self.__init__(_vnf = [(1, 0)])
+            self.__init__(_vnf = [(1, 0, 1)])
             return
         if name in _zeta_0_aliases:
-            self.__init__(_vnf = [(2, 0)])
+            self.__init__(_vnf = [(2, 0, 1)])
             return
         if name is not None:
             raise ValueError('Named ordinal unknown')
         # Use the internal representation
+        # VNF + CNF + NAT
+        # In CNF, (p, c) represents omega^p dot c
+        # In VNF, (s, i, c) represents phi_s(i) dot c
         if _nat is None:
             _nat = 0
         if _cnf is None:
@@ -548,8 +552,10 @@ class ordinal(ordinal_type):
         return self._hash
     def __str__(self):
         bits = []
-        for s, i in self._vnf:
-            bit = '{\\varphi_' + str(s) + '(' + str(i) + ')}'
+        for s, i, c in self._vnf:
+            bit = '\\varphi_' + str(s) + '(' + str(i) + ')'
+            if c != 1:
+                bit = bit + ' \\cdot ' + str(c)
             bits.append(bit)
         for p, c in self._cnf:
             bit = '\\omega'
@@ -614,6 +620,64 @@ class ordinal(ordinal_type):
     def __neg__(self):
         if self == 0:return 0
         raise ValueError('Cannot negate a positive ordinal')
+    def __add__(self, other):
+        """
+        Sum of 2 ordinal numbers.
+        """
+        # We first handle the type stuff
+        if isinstance(other, int):
+            if other < 0:
+                raise ValueError('Cannot add negative integers to ordinals')
+            rvnf = self._vnf
+            rcnf = self._cnf
+            rnat = self._nat + other
+            return ordinal(_nat = rnat, _cnf = rcnf, _vnf = rvnf)
+        if not isinstance(other, ordinal):
+            raise TypeError('Unknown type being added to an ordinal')
+        # Addition is pretty simple!
+        # Addition is associative, so we can break up left and right operands however we want
+        # Here is the key rule for reducing a term:
+        #   omega^A N + omega^B M =
+        #     A < B --> omega^B M
+        #     A = B --> omega^A (N + M)
+        #     A > B --> no reduction possible
+        # To summarize: when the left is smaller, it gets erased,
+        #   and multiplication left distributes over addition.
+        if other._vnf:
+            # Right argument has largest term in the VNF range
+            rvnf = list(self._vnf)
+            ovnf = other._vnf
+            while rvnf and rvnf[-1][0:2] < ovnf[0][0:2]:
+                del rvnf[-1]
+            if rvnf and rvnf[-1][0:2] == ovnf[0][0:2]:
+                last = rvnf[-1]
+                rvnf[-1] = (last[0], last[1], last[2] + ovnf[0][2])
+                ovnf = ovnf[1:]
+            rvnf += ovnf
+            rcnf = other._cnf
+            rnat = other._nat
+            return ordinal(_nat = rnat, _cnf = rcnf, _vnf = rvnf)
+        if other._cnf:
+            # Right argument has largest item in the CNF range
+            rvnf = self._vnf
+            rcnf = list(self._cnf)
+            ocnf = other._cnf
+            while rcnf and rcnf[-1][0] < ocnf[0][0]:
+                del rcnf[-1]
+            if rcnf and rcnf[-1][0] == ocnf[0][0]:
+                last = rcnf[-1]
+                rcnf[-1] = (last[0], last[1] + ocnf[0][1])
+                ocnf = ocnf[1:]
+            rcnf += ocnf
+            rnat = other._nat
+            return ordinal(_nat = rnat, _cnf = rcnf, _vnf = rvnf)
+        # Right argument is a natural number
+        rvnf = self._vnf
+        rcnf = self._cnf
+        rnat = self._nat + other._nat
+        return ordinal(_nat = rnat, _cnf = rcnf, _vnf = rvnf)
+    def __radd__(self, other):
+        return ordinal(other) + self
 
 def veblen(sub, value):
     """
@@ -636,7 +700,7 @@ def veblen(sub, value):
         if value == 0:
             return 1
         return ordinal(_cnf = [(value, 1)])
-    return ordinal(_vnf = [(sub, value)])
+    return ordinal(_vnf = [(sub, value, 1)])
 
 _omega_aliases = {'omega','w','\\omega'}
 _epsilon_0_aliases = {'epsilon_0','epsilon0','eps_0','eps0','e_0','e0','\\epsilon_0'}
