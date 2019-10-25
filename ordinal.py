@@ -579,7 +579,40 @@ class ordinal(ordinal_type):
     def __ne__(self, other):
         return not self == other
     def __lt__(self, other):
-        
+        if self is other:
+            return False
+        if isinstance(other, numbers.Real):
+            if self._cnf or self._vnf:
+                return False
+            return self._nat < other
+        if not isinstance(other, ordinal):
+            raise TypeError('Cannot compare an ordinal with this type')
+        if hash(self) == hash(other):return False
+        if self._tier < other._tier:return True
+        if self._tier > other._tier:return False
+        return (self._vnf, self._cnf, self._nat) < (other._vnf, other._cnf, other._nat)
+    def __le__(self, other):
+        if self is other:
+            return True
+        if isinstance(other, numbers.Real):
+            if self._cnf or self._vnf:
+                return False
+            return self._nat <= other
+        if not isinstance(other, ordinal):
+            raise TypeError('Cannot compare an ordinal with this type')
+        if hash(self) == hash(other):return True
+        if self._tier < other._tier:return True
+        if self._tier > other._tier:return False
+        return (self._vnf, self._cnf, self._nat) <= (other._vnf, other._cnf, other._nat)
+    def __gt__(self, other):
+        return not self <= other
+    def __ge__(self, other):
+        return not self < other
+    def __pos__(self):
+        return self
+    def __neg__(self):
+        if self == 0:return 0
+        raise ValueError('Cannot negate a positive ordinal')
 
 def veblen(sub, value):
     """
