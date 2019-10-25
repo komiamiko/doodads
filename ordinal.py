@@ -389,9 +389,9 @@ class _named_const(object):
     def __init__(self, _str, _repr):
         self._str = _str
         self._repr = _repr
-    def __str__(self, name):
+    def __str__(self):
         return self._str
-    def __repr__(self, name):
+    def __repr__(self):
         return self._repr
 
 class ordinal_type(abc.ABC):
@@ -540,16 +540,17 @@ class ordinal(ordinal_type):
             _tier = (_tier[0] + 2, _tier[1])
         elif self._cnf:
             _tier = tier(self._cnf[0][0])
-            _tier = (1, _tier[0])
+            _tier = (1, (_tier[0] and _tier[1]) + 1)
         else:
-            _tier = (0, binlog(self._nat))
+            _tier = (0, bin_log(self._nat))
         self._tier = _tier
     def __hash__(self):
         return self._hash
     def __str__(self):
         bits = []
         for s, i in self._vnf:
-            bit = '{\\phi_' + str(s) + '(' + str(i) + ')}'
+            bit = '{\\varphi_' + str(s) + '(' + str(i) + ')}'
+            bits.append(bit)
         for p, c in self._cnf:
             bit = '\\omega'
             if p != 1:
@@ -570,7 +571,7 @@ class ordinal(ordinal_type):
         if isinstance(other, numbers.Real):
             if self._cnf or self._vnf:
                 return False
-            return self._nat = other
+            return self._nat == other
         if not isinstance(other, ordinal):
             return False
         if hash(self) != hash(other):return False
