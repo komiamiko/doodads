@@ -469,8 +469,16 @@ class ordinal(ordinal_type):
       natural numbers, Cantor normal form, Veblen normal form
       respectively.
     This means it is theoretically possible, using this class,
-      to represent all ordinals up to but not including gamma_0
+      to represent ordinals up to but not including gamma_0
       using this class.
+    Arithmetic operations work fine below epsilon_0, but some may
+      break above epsilon_0, because the Veblen normal form cannot
+      represent the results. Note however, that if you only ever use
+      addition and the Veblen function, then all values can be represented,
+      and nothing breaks. You cannot actually get to epsilon_0 using
+      only the basic arithmetic operators and without limits, so,
+      in summary, do not mix (multiplication and exponetiation) and the
+      Veblen function.
     All ordinal operations in this module are implemented by this class,
       but it is recommended to use the regular operator symbols
       and static utility functions
@@ -696,10 +704,17 @@ def veblen(sub, value):
       do your own research.
     A full explanation will not fit nicely in this doc comment.
     """
+    # there might be fixed points!
+    if isinstance(value, ordinal) and len(value._vnf) == 1 and value._vnf[0][0] > sub and value._vnf[0][2] == 1:
+        # yes, it is a fixed point
+        return value
+    # do the Veblen stuff normally
     if sub == 0:
+        # subscript 0 is the special case that ends the recursive definition
         if value == 0:
             return 1
         return ordinal(_cnf = [(value, 1)])
+    # otherwise we just build the Veblen normal form directly
     return ordinal(_vnf = [(sub, value, 1)])
 
 _omega_aliases = {'omega','w','\\omega'}
