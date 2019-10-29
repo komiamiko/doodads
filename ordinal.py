@@ -512,6 +512,7 @@ class ordinal(ordinal_type):
                     _cnf = list(_cnf)
                     _vnf = list(_vnf)
                 self.__init__(_nat = _nat, _cnf = _cnf, _vnf = _vnf)
+            raise TypeError('Cannot convert from this value type')
         # Is this a specific named ordinal?
         if name in _omega_aliases:
             self.__init__(_cnf = [(1, 1)])
@@ -616,18 +617,34 @@ class ordinal(ordinal_type):
         bsub, bindex, bcount = b
         # fixed point unwrapping:
         #   phi_A (B) N <> phi_C (D) M
-        # = phi_A (B) N <> phi_A (phi_C (D)) N + phi_C (D) (-N + M)  where A < C
-        # = phi_A (B) N + phi_C (D) N <> phi_A (phi_C (D)) N + phi_C (D) M
-        # = phi_A (B) N, phi_C (D) N <> phi_A (phi_C (D)) N, phi_C (D) M
-        # = B, N <> phi_C (D), M
+        #   this is the magic step
+        #   (phi_A (B), N) <> (phi_C (D), M)
+        #     why can we do this?
+        #     suppose phi_A (B) = phi_C (D)
+        #     then
+        #       phi_A (B) N <> phi_C (D) M
+        #       is the same as
+        #       N <> M
+        #     now suppose without loss of generality that phi_A (B) > phi_C (D)
+        #     the Veblen function grows really fast
+        #     the absolute lower bound is phi_A (B) >= phi_C (D) omega
+        #     this occurs with ex. phi_0 (E + 1) <> phi_0 (E)
+        #     this omega multiply is already bigger than any constant
+        #     so the constants won't matter
+        #   let us see how to handle phi_A (B) <> phi_C (D)
+        #   since N <> M is really easy
+        #   suppose A < C
+        #   phi_A (B) <> phi_C (D)
+        #   phi_A (B) <> phi_A ( phi_C (D))
+        #   B <> phi_C (D)
         if asub < bsub:
             a2 = aindex
             b2 = ordinal(_vnf = [b[:-1] + (1,)])
-            return _cmp((a2, acount), (b2, b[-1]))
+            return _cmp((a2, acount), (b2, bcount))
         if asub > bsub:
             a2 = ordinal(_vnf = [a[:-1] + (1,)])
             b2 = bindex
-            return _cmp((a2, a[-1]), (b2, bcount))
+            return _cmp((a2, acount), (b2, bcount))
         # asub == bsub
         return _cmp((aindex, acount), (bindex, bcount))
     def __lt__(self, other):

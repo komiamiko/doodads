@@ -2,295 +2,150 @@
 Unit tests for the ordinal library.
 """
 
-# test file will need rewriting after the unified ordinal class is ready
-
-from ordinal import _omega_t, omega, ordinal
+import ordinal as _
 import itertools
 import warnings
 import unittest
 
-class TestOmegaClass(unittest.TestCase):
-    def test_instance(self):
-        self.assertEqual(omega, _omega_t())
-    def test_compare(self):
-        for n in 0, 1, 4, -1:
-            self.assertFalse(omega == n)
-            self.assertTrue(omega != n)
-            self.assertFalse(omega < n)
-            self.assertTrue(omega > n)
-            self.assertFalse(omega <= n)
-            self.assertTrue(omega >= n)
-        self.assertTrue(omega == omega)
-        self.assertFalse(omega != omega)
-        self.assertFalse(omega < omega)
-        self.assertFalse(omega > omega)
-        self.assertTrue(omega <= omega)
-        self.assertTrue(omega >= omega)
+class TestBisectedFunctions(unittest.TestCase):
+    
+    def test_reduce(self):
+        from ordinal import reduce_bisected
+        from functools import reduce
+        from random import randint
+        from operator import add, mul
+
+        int_seq = []
+        for _ in range(1000):
+            value = randint(-3, 3)
+            int_seq.append(value)
+
+        for n in range(0, 1001):
+            subseq = int_seq[0:n]
+            self.assertEqual(
+                reduce(add, subseq, 0),
+                reduce_bisected(add, subseq, 0)
+                )
+
+        int_seq = []
+        for _ in range(1000):
+            value = randint(-2, 3)
+            if value <= 0:
+                value -= 1
+            int_seq.append(value)
+
+        for n in range(0, 1001):
+            subseq = int_seq[0:n]
+            self.assertEqual(
+                reduce(mul, subseq, 1),
+                educe_bisected(mul, subseq, 1)
+                )
+
+        lin_seq = []
+        ident = (1, 0)
+        for _ in range(1000):
+            u = randint(-2, 3)
+            if u <= 0:
+                u -= 1
+            v = randint(-5, 5)
+            lin_seq.append((u, v))
+
+        def lin_concat(a, b):
+            au, av = a
+            bu, bv = b
+            return (au * bu, au * bv + av)
+
+        for n in range(0, 1001):
+            subseq = lin_seq[0:n]
+            self.assertEqual(
+                reduce(lin_concat, subseq, ident),
+                reduce_bisected(lin_concat, subseq, ident)
+                )
+            
+    def test_sum(self):
+        from ordinal import sum_bisected
+        from random import randint
+
+        int_seq = []
+        for _ in range(1000):
+            value = randint(-1000, 1000)
+            int_seq.append(value)
+
+        for n in range(0, 1001):
+            subseq = int_seq[0:n]
+            self.assertEqual(
+                sum(subseq),
+                sum_bisected(subseq)
+                )
 
 class TestOrdinalClass(unittest.TestCase):
-    def test_instance_cnf(self):
-        self.assertEqual(ordinal(0).cnf, [])
-        self.assertEqual(ordinal(1).cnf, [(0, 1)])
-        self.assertEqual(ordinal(7).cnf, [(0, 7)])
-        self.assertEqual(ordinal('omega').cnf, [(1, 1)])
-        self.assertEqual(ordinal([(4, 3), (2, 1)]).cnf, [(4, 3), (2, 1)])
-    def test_instance_eq(self):
-        self.assertEqual(ordinal(0), 0)
-        self.assertEqual(ordinal(1), 1)
-        self.assertEqual(ordinal(3), ordinal(3))
-        self.assertEqual(ordinal('omega'), omega)
-        self.assertEqual(ordinal(omega), omega)
-    def test_compare(self):
-        self.assertTrue(ordinal(omega) == omega)
-        self.assertTrue(ordinal(omega) >= omega)
-        self.assertTrue(ordinal(omega) <= omega)
-        self.assertFalse(ordinal(omega) != omega)
-        self.assertFalse(ordinal(omega) > omega)
-        self.assertFalse(ordinal(omega) < omega)
-        self.assertTrue(ordinal(0) == 0)
-        self.assertTrue(ordinal(0) < 1)
-        self.assertFalse(ordinal(1) < 0)
-        self.assertFalse(ordinal(omega) < 0)
-        self.assertTrue(ordinal(omega) > 1)
-        ord_ref = ordinal([(3, 2), (1, 4), (0, 1)])
-        for cnf in [
-            [(1, 4), (0, 1)],
-            [(1, 9)],
-            [(3, 1), (1, 8)],
-            [(3, 1), (2, 6), (1, 7), (0, 8)],
-            [(3, 2), (1, 3), (0, 7)],
-            [(3, 2), (1, 4)]
-            ]:
-            ord_cmp = ordinal(cnf)
-            self.assertTrue(ord_ref > ord_cmp)
-            self.assertTrue(ord_ref >= ord_cmp)
-            self.assertTrue(ord_ref != ord_cmp)
-            self.assertFalse(ord_ref < ord_cmp)
-            self.assertFalse(ord_ref <= ord_cmp)
-            self.assertFalse(ord_ref == ord_cmp)
-        for cnf in [
-            [(3, 2), (1, 4), (0, 1)]
-            ]:
-            ord_cmp = ordinal(cnf)
-            self.assertTrue(ord_ref == ord_cmp)
-            self.assertTrue(ord_ref >= ord_cmp)
-            self.assertTrue(ord_ref <= ord_cmp)
-            self.assertFalse(ord_ref < ord_cmp)
-            self.assertFalse(ord_ref > ord_cmp)
-            self.assertFalse(ord_ref != ord_cmp)
-        for cnf in [
-            [(3, 2), (1, 4), (0, 2)],
-            [(3, 2), (1, 5)],
-            [(3, 2), (2, 1)],
-            [(3, 3), (0, 1)],
-            [(4, 1)]
-            ]:
-            ord_cmp = ordinal(cnf)
-            self.assertTrue(ord_ref < ord_cmp)
-            self.assertTrue(ord_ref <= ord_cmp)
-            self.assertTrue(ord_ref != ord_cmp)
-            self.assertFalse(ord_ref > ord_cmp)
-            self.assertFalse(ord_ref >= ord_cmp)
-            self.assertFalse(ord_ref == ord_cmp)
-    def test_compare_recursive(self):
-        n = 20
-        seq_a = [ordinal([(1, 1)])]
-        seq_b = [ordinal([(1, 1), (0, 1)])]
-        while len(seq_a) < n:
-            seq_a.append(ordinal([(seq_a[-1], 2), (2, 1)]))
-            seq_b.append(ordinal([(seq_b[-1], 1)]))
-        for i in range(n):
-            a = seq_a[i]
-            b = seq_b[i]
-            self.assertTrue(a < b)
-            self.assertTrue(a <= b)
-            self.assertTrue(a != b)
-            self.assertFalse(a > b)
-            self.assertFalse(a >= b)
-            self.assertFalse(a == b)
-        for i in range(1, n):
-            b = seq_a[i]
-            for j in range(i):
-                a = seq_a[j]
-                self.assertTrue(a < b)
-                self.assertTrue(a <= b)
-                self.assertTrue(a != b)
-                self.assertFalse(a > b)
-                self.assertFalse(a >= b)
-                self.assertFalse(a == b)
-            b = seq_b[i]
-            for j in range(i):
-                a = seq_b[j]
-                self.assertTrue(a < b)
-                self.assertTrue(a <= b)
-                self.assertTrue(a != b)
-                self.assertFalse(a > b)
-                self.assertFalse(a >= b)
-                self.assertFalse(a == b)
-    def test_instance_warn(self):
-        warnings.simplefilter('error')
-        with self.assertRaises(UserWarning):
+
+    def test_integers(self):
+        from ordinal import ordinal, ordinal_type
+
+        for i in range(100):
+            
+            self.assertTrue(isinstance(i, ordinal_type))
+            self.assertTrue(isinstance(ordinal(i), ordinal_type))
+            
+            self.assertEq(i == i, ordinal(i) == i)
+            self.assertEq(i == i, ordinal(i) == ordinal(i))
+            self.assertEq(i != i, ordinal(i) != i)
+            self.assertEq(i != i, ordinal(i) != ordinal(i))
+            self.assertEq(i > i, ordinal(i) > i)
+            self.assertEq(i > i, ordinal(i) > ordinal(i))
+            self.assertEq(i >= i, ordinal(i) >= i)
+            self.assertEq(i >= i, ordinal(i) >= ordinal(i))
+            self.assertEq(i < i, ordinal(i) < i)
+            self.assertEq(i < i, ordinal(i) < ordinal(i))
+            self.assertEq(i <= i, ordinal(i) <= i)
+            self.assertEq(i <= i, ordinal(i) <= ordinal(i))
+
+        for j in range(1, 100):
+            for i in range(j):
+
+                self.assertEq(i == j, ordinal(i) == j)
+                self.assertEq(i == j, ordinal(i) == ordinal(j))
+                self.assertEq(i != j, ordinal(i) != j)
+                self.assertEq(i != j, ordinal(i) != ordinal(j))
+                self.assertEq(i > j, ordinal(i) > j)
+                self.assertEq(i > j, ordinal(i) > ordinal(j))
+                self.assertEq(i >= j, ordinal(i) >= j)
+                self.assertEq(i >= j, ordinal(i) >= ordinal(j))
+                self.assertEq(i < j, ordinal(i) < j)
+                self.assertEq(i < j, ordinal(i) < ordinal(j))
+                self.assertEq(i <= j, ordinal(i) <= j)
+                self.assertEq(i <= j, ordinal(i) <= ordinal(j))
+
+                self.assertEq(j == i, ordinal(j) == i)
+                self.assertEq(j == i, ordinal(j) == ordinal(i))
+                self.assertEq(j != i, ordinal(j) != i)
+                self.assertEq(j != i, ordinal(j) != ordinal(i))
+                self.assertEq(j > i, ordinal(j) > i)
+                self.assertEq(j > i, ordinal(j) > ordinal(i))
+                self.assertEq(j >= i, ordinal(j) >= i)
+                self.assertEq(j >= i, ordinal(j) >= ordinal(i))
+                self.assertEq(j < i, ordinal(j) < i)
+                self.assertEq(j < i, ordinal(j) < ordinal(i))
+                self.assertEq(j <= i, ordinal(j) <= i)
+                self.assertEq(j <= i, ordinal(j) <= ordinal(i))
+
+        with self.assertRaises(ValueError):
             ordinal(-1)
-        with self.assertRaises(UserWarning):
-            ordinal([], unchecked=True)
-        with self.assertRaises(UserWarning):
-            ordinal([(1/2, 1)], unchecked=True)
-        with self.assertRaises(UserWarning):
-            ordinal([(-1, 1)], unchecked=True)
-        with self.assertRaises(UserWarning):
-            ordinal([(1, 1/2)], unchecked=True)
-        with self.assertRaises(UserWarning):
-            ordinal([(1, -1)], unchecked=True)
-        warnings.resetwarnings()
-    def test_add_basic(self):
-        operands = [
-            ordinal([]), # 0
-            ordinal([(0, 1)]), # 1
-            ordinal([(0, 4)]), # 4
-            ordinal([(1, 1)]), # omega
-            ordinal([(2, 9)]), # omega**2 * 9
-            ]
-        results = [
-            [],
-            [(0, 1)],
-            [(0, 4)],
-            [(1, 1)],
-            [(2, 9)],
-            [(0, 1)],
-            [(0, 2)],
-            [(0, 5)],
-            [(1, 1)],
-            [(2, 9)],
-            [(0, 4)],
-            [(0, 5)],
-            [(0, 8)],
-            [(1, 1)],
-            [(2, 9)],
-            [(1, 1)],
-            [(1, 1), (0, 1)],
-            [(1, 1), (0, 4)],
-            [(1, 2)],
-            [(2, 9)],
-            [(2, 9)],
-            [(2, 9), (0, 1)],
-            [(2, 9), (0, 4)],
-            [(2, 9), (1, 1)],
-            [(2, 18)]
-            ]
-        for (a,b),r in zip(itertools.product(*[operands]*2), results):
-            self.assertEqual(r, ordinal(a + b).cnf)
-    def test_add_large(self):
-        small = 2**8191-1
-        big = ordinal([(2, 1), (1, 2)])
-        huge = ordinal([(big, 3)])
-        operands = [
-            ordinal([(small, 7), (0, 2)]),
-            ordinal([(big, 2), (0, 5)]),
-            ordinal([(huge, 1), (small, 8), (0, 3)]),
-            ordinal([(huge, 4), (big, 3), (0, 6)])
-            ]
-        results = [
-            [(small, 14), (0, 2)],
-            [(big, 2), (0, 5)],
-            [(huge, 1), (small, 8), (0, 3)],
-            [(huge, 4), (big, 3), (0, 6)],
-            [(big, 2), (small, 7), (0, 2)],
-            [(big, 4), (0, 5)],
-            [(huge, 1), (small, 8), (0, 3)],
-            [(huge, 4), (big, 3), (0, 6)],
-            [(huge, 1), (small, 15), (0, 2)],
-            [(huge, 1), (big, 2), (0, 5)],
-            [(huge, 2), (small, 8), (0, 3)],
-            [(huge, 5), (big, 3), (0, 6)],
-            [(huge, 4), (big, 3), (small, 7), (0, 2)],
-            [(huge, 4), (big, 5), (0, 5)],
-            [(huge, 5), (small, 8), (0, 3)],
-            [(huge, 8), (big, 3), (0, 6)]
-            ]
-        for (a,b),r in zip(itertools.product(*[operands]*2), results):
-            self.assertEqual(r, ordinal(a + b).cnf)
-    def test_multiply_basic(self):
-        operands = [
-            ordinal([]), # 0
-            ordinal([(0, 1)]), # 1
-            ordinal([(0, 4)]), # 4
-            ordinal([(1, 1)]), # omega
-            ordinal([(2, 9)]), # omega**2 * 9
-            ]
-        results = [
-            [],
-            [],
-            [],
-            [],
-            [],
-            [],
-            [(0, 1)],
-            [(0, 4)],
-            [(1, 1)],
-            [(2, 9)],
-            [],
-            [(0, 4)],
-            [(0, 16)],
-            [(1, 1)],
-            [(2, 9)],
-            [],
-            [(1, 1)],
-            [(1, 4)],
-            [(2, 1)],
-            [(3, 9)],
-            [],
-            [(2, 9)],
-            [(2, 36)],
-            [(3, 1)],
-            [(4, 9)]
-            ]
-        for (a,b),r in zip(itertools.product(*[operands]*2), results):
-            self.assertEqual(r, ordinal(a * b).cnf)
-    def test_arithmetic_expr(self):
-        self.assertEqual(1 + omega, omega)
-        self.assertEqual(omega + omega, omega * 2)
-        self.assertEqual((omega + 2) * (omega + 3), omega * omega + omega * 3)
-    def test_multiply_mid(self):
-        operands = [
-            ordinal([(6, 8), (5, 7), (3, 6), (0, 5)]),
-            ordinal([(ordinal([(1, 1), (0, 2)]), 3), (0, 4)]),
-            ordinal([(ordinal([(1, 1), (0, 4)]), 3), (0, 2)])
-            ]
-        results = [
-            [(12, 8), (11, 7), (9, 6), (6, 40)],
-            [(ordinal([(1, 1), (0, 2)]), 3), (6, 32)],
-            [(ordinal([(1, 1), (0, 4)]), 3), (6, 16)],
-            [
-                (ordinal([(1, 1), (0, 8)]), 8),
-                (ordinal([(1, 1), (0, 7)]), 7),
-                (ordinal([(1, 1), (0, 5)]), 6),
-                (ordinal([(1, 1), (0, 2)]), 15)
-                ],
-            [
-                (ordinal([(1, 2), (0, 2)]), 3),
-                (ordinal([(1, 1), (0, 2)]), 12)
-                ],
-            [
-                (ordinal([(1, 2), (0, 4)]), 3),
-                (ordinal([(1, 1), (0, 2)]), 6)
-                ],
-            [
-                (ordinal([(1, 1), (0, 10)]), 8),
-                (ordinal([(1, 1), (0, 9)]), 7),
-                (ordinal([(1, 1), (0, 7)]), 6),
-                (ordinal([(1, 1), (0, 4)]), 15)
-                ],
-            [
-                (ordinal([(1, 2), (0, 2)]), 3),
-                (ordinal([(1, 1), (0, 4)]), 12)
-                ],
-            [
-                (ordinal([(1, 2), (0, 4)]), 3),
-                (ordinal([(1, 1), (0, 4)]), 6)
-                ]
-            ]
-        for (a,b),r in zip(itertools.product(*[operands]*2), results):
-            self.assertEqual(r, ordinal(a * b).cnf)
+
+        with self.assertRaises(TypeError):
+            ordinal(0.5)
+
+    def test_constants(self):
+        from ordinal import ordinal, omega, epsilon_0, zeta_0
+
+        self.assertEq(omega, ordinal('omega'))
+        self.assertEq(epsilon_0, ordinal('epsilon_0'))
+        self.assertEq(zeta_0, ordinal('zeta_0'))
+        
+        self.assertTrue(1 < omega)
+        self.assertTrue(omega < epsilon_0)
+        self.assertTrue(epsilon_0 < zeta_0)
 
 if __name__ == '__main__':
     unittest.main()
