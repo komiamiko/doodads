@@ -570,6 +570,8 @@ class ordinal(ordinal_type):
         else:
             _tier = (0, bin_log(self._nat))
         self._tier = _tier
+        # fundamental sequence is lazily calculated
+        self._fundamental = None
     def __hash__(self):
         return self._hash
     def __str__(self):
@@ -689,6 +691,26 @@ class ordinal(ordinal_type):
         return not self <= other
     def __ge__(self, other):
         return not self < other
+    def _get_fundamental(self):
+        """
+        Returns the fundamental sequence for this ordinal.
+        Constructs it if necessary.
+        """
+        if self._fundamental is None:
+            self._fundamental = fundamental(self)
+        return self._fundamental
+    def __iter__(self):
+        """
+        Iterate over this ordinal's fundamental sequence.
+        For more information, see the fundamental class.
+        """
+        return iter(self._get_fundamental())
+    def __getitem__(self, index):
+        """
+        Get the item at some index of this ordinal's fundamental sequence.
+        For more information, see the fundamental class.
+        """
+        return self._get_fundamental()[index]
     def __pos__(self):
         return self
     def __neg__(self):
@@ -884,6 +906,34 @@ def veblen(sub, value):
         return ordinal(_cnf = [(value, 1)])
     # otherwise we just build the Veblen normal form directly
     return ordinal(_vnf = [(sub, value, 1)])
+
+class fundamental(object):
+    """
+    Class representing a fundamental sequence for limit ordinals.
+    The fundamental sequence of an ordinal is defined
+      if and only if it is a limit ordinal.
+    Currently does not extend the sequence type. Reason is that this
+      is an immutable infinite sequence, and time to construct the Nth
+      ordinal in the sequence given the previous ordinal is not always O(1),
+      in fact, it is commonly O(N) for ordinals in the Veblen hierarchy,
+      which makes it O(N^2) to compute the first N items.
+      The person making this does not know if that is the worst case.
+    """
+    def __init__(self, value, cache_every=16):
+        """
+        Construct the fundamental sequence object for a given ordinal.
+        Raises an error if the ordinal is not a limit ordinal, because the type is undefined.
+        To help manage the cost of computation, this class will make a memory tradeoff
+          and store the intermediate computations for every Cth item, for some parameter C,
+          for ordinals where this kind of optimization can save time.
+          By default, C=16, which makes for a small memory footprint while limiting
+          improving the worst case by a factor of O(N), where N is the number of items.
+        """
+        if not isinstance(value, ordinal):
+            raise TypeError('Value is not an ordinal number.')
+        if kind(value) != kind_limit:
+            raise ValueError('Not a limit ordinal, no fundamental sequence exists')
+        pass
 
 _omega_aliases = {'omega','w','\\omega'}
 _epsilon_0_aliases = {'epsilon_0','epsilon0','eps_0','eps0','e_0','e0','\\epsilon_0'}
