@@ -336,6 +336,7 @@ class ordinal(object):
 # below: unified ordinal class implementation
 
 import abc
+import functools
 import itertools
 import numbers
 import operator
@@ -526,7 +527,9 @@ class ordinal(ordinal_type):
         # Use the internal representation
         # VNF + CNF + NAT
         # In CNF, (p, c) represents omega^p dot c
+        #   every term is at least omega, so p > 0
         # In VNF, (s, i, c) represents phi_s(i) dot c
+        #   every term is at least epsilon_0, but this does not guarantee s > 0
         if _nat is None:
             _nat = 0
         if _cnf is None:
@@ -561,14 +564,17 @@ class ordinal(ordinal_type):
     def __str__(self):
         bits = []
         for s, i, c in self._vnf:
-            bit = '\\varphi_' + str(s) + '(' + str(i) + ')'
+            if s == 0:
+                bit = '\\omega^{' + str(i) + '}'
+            else:
+                bit = '\\varphi_' + str(s) + '(' + str(i) + ')'
             if c != 1:
                 bit = bit + ' \\cdot ' + str(c)
             bits.append(bit)
         for p, c in self._cnf:
             bit = '\\omega'
             if p != 1:
-                bit = '{' + bit + '}^{' + str(p) + '}'
+                bit = bit + '^{' + str(p) + '}'
             if c != 1:
                 bit = bit + ' \\cdot ' + str(c)
             bits.append(bit)
@@ -593,6 +599,36 @@ class ordinal(ordinal_type):
         return self._vnf == other._vnf and self._cnf == other._cnf and self._nat == other._nat
     def __ne__(self, other):
         return not self == other
+    @staticmethod
+    def _veblen_cmp(a, b):
+        """
+        For internal use:
+        return the sign of a - b
+        where a and b represent terms in the VNF
+        """
+        # comparator-like function for other types
+        def _cmp(x, y):
+            if x == y:return 0
+            if x < y:return -1
+            return 1
+        # unwrap a and b
+        asub, aindex, acount = a
+        bsub, bindex, bcount = b
+        # fixed point unwrapping:
+        #   phi_A (B) <> phi_C (D)
+        # = phi_A (B) <> phi_A (phi_C (D))  where A < C
+        # = B <> phi_C (D)
+        # FIXME it thinks omega^(epsilon_0+1) < epsilon_0 2
+        if asub < bsub:
+            a2 = aindex
+            b2 = ordinal(_vnf = [b])
+            return _cmp((a2, acount), (b2, 1))
+        if asub > bsub:
+            a2 = ordinal(_vnf = [a])
+            b2 = bindex
+            return _cmp((a2, 1), (b2, bcount))
+        # asub == bsub
+        return _cmp((aindex, acount), (bindex, bcount))
     def __lt__(self, other):
         if self is other:
             return False
@@ -605,7 +641,8 @@ class ordinal(ordinal_type):
         if hash(self) == hash(other):return False
         if self._tier < other._tier:return True
         if self._tier > other._tier:return False
-        return (self._vnf, self._cnf, self._nat) < (other._vnf, other._cnf, other._nat)
+        vnf_key = functools.cmp_to_key(ordinal._veblen_cmp)
+        return (tuple(map(vnf_key, self._vnf)), self._cnf, self._nat) < (tuple(map(vnf_key, other._vnf)), other._cnf, other._nat)
     def __le__(self, other):
         if self is other:
             return True
@@ -618,7 +655,8 @@ class ordinal(ordinal_type):
         if hash(self) == hash(other):return True
         if self._tier < other._tier:return True
         if self._tier > other._tier:return False
-        return (self._vnf, self._cnf, self._nat) <= (other._vnf, other._cnf, other._nat)
+        vnf_key = functools.cmp_to_key(ordinal._veblen_cmp)
+        return (tuple(map(vnf_key, self._vnf)), self._cnf, self._nat) <= (tuple(map(vnf_key, other._vnf)), other._cnf, other._nat)
     def __gt__(self, other):
         return not self <= other
     def __ge__(self, other):
@@ -655,9 +693,9 @@ class ordinal(ordinal_type):
             # Right argument has largest term in the VNF range
             rvnf = list(self._vnf)
             ovnf = other._vnf
-            while rvnf and rvnf[-1][0:2] < ovnf[0][0:2]:
+            while rvnf and ordinal._veblen_cmp(rvnf[-1][0:2] + (1,), ovnf[0][0:2] + (1,)) < 0:
                 del rvnf[-1]
-            if rvnf and rvnf[-1][0:2] == ovnf[0][0:2]:
+            if rvnf and ordinal._veblen_cmp(rvnf[-1][0:2] + (1,), ovnf[0][0:2] + (1,)) == 0:
                 last = rvnf[-1]
                 rvnf[-1] = (last[0], last[1], last[2] + ovnf[0][2])
                 ovnf = ovnf[1:]
@@ -686,6 +724,106 @@ class ordinal(ordinal_type):
         return ordinal(_nat = rnat, _cnf = rcnf, _vnf = rvnf)
     def __radd__(self, other):
         return ordinal(other) + self
+    def __mul__(self, other):
+        """
+        Product of 2 ordinal numbers.
+        """
+        # some small exceptional cases
+        if other == 0:
+            # rule: A * 0 --> 0
+            return 0
+        if other == 1:
+            # rule: A * 1 --> A
+            return self
+        if self == 0:
+            # rule: 0 * A --> 0
+            return 0
+        if self == 1:
+            # rule: 1 * A --> A
+            return other
+         # We first handle the type stuff
+        if isinstance(other, int):
+            if other < 0:
+                raise ValueError('Cannot multiply ordinals by negative numbers')
+            rvnf = [(s, i, c * other) for s,i,c in self._vnf]
+            rcnf = [(p, c * other) for p,c in self._cnf]
+            rnat = self._nat * other
+            return ordinal(_nat = rnat, _cnf = rcnf, _vnf = rvnf)
+        if not isinstance(other, ordinal):
+            raise TypeError('Unknown type trying to multiply an ordinal by')
+        pieces = []
+        # we will left distribute and multiply
+        # it is important to know which hierarchy the left operand lands in
+        if self._vnf:
+            self_h = 2
+            self_top = self._vnf[0]
+        elif self._cnf:
+            self_h = 1
+            self_top = self._cnf[0]
+        else:
+            self_h = 0
+            self_top = self._nat
+        def _exp_add(l_up, r_up, rc):
+            """
+            Computes the ordinal omega^(A + B) C
+            Intended for when the result is known to fall in the Veblen hierarchy.
+            """
+            up = l_up + r_up
+            if len(up._vnf) == 1 and up._vnf[0][0] != 0 and up._vnf[0][2] == 1:
+                uv = up._vnf[0]
+                return ordinal(_vnf = [uv[:-1] + (uv[-1] * rc,)])
+            else:
+                return ordinal(_vnf = [(0, up, rc)])
+        def _term_mul(l_h, l_value, r_h, r_value):
+            """
+            Product of a multiplicative term.
+            """
+            # since all of these are additively indecomposable
+            #   (multiplicative terms)
+            #   they are either natural numbers or limit ordinals
+            if r_h == 0:
+                if l_h == 0:
+                    return ordinal(_nat = l_value * r_value)
+                if l_h == 1:
+                    return ordinal(_cnf = [l_value[:-1] + (l_value[-1] * r_value,)])
+                if l_h == 2:
+                    return ordinal(_vnf = [l_value[:-1] + (l_value[-1] * r_value,)])
+            if r_h == 1:
+                if l_h == 0:
+                    return ordinal(_cnf = [r_value])
+                if l_h == 1:
+                    return ordinal(_cnf = [(l_value[0] + r_value[0], r_value[1])])
+                if l_h == 2:
+                    l_up = ordinal(_vnf = [l_value]) if l_value[0] != 0 else l_value[1]
+                    r_up = r_value[0]
+                    return _exp_add(l_up, r_up, r_value[-1])
+            if r_h == 2:
+                if l_h == 0:
+                    return ordinal(_vnf = [r_value])
+                if l_h == 1:
+                    l_up = l_value[0]
+                    r_up = ordinal(_vnf = [r_value]) if r_value[0] != 0 else r_value[1]
+                    return _exp_add(l_up, r_up, r_value[-1])
+                if l_h == 2:
+                    l_up = ordinal(_vnf = [l_value]) if l_value[0] != 0 else l_value[1]
+                    r_up = ordinal(_vnf = [r_value]) if r_value[0] != 0 else r_value[1]
+                    return _exp_add(l_up, r_up, r_value[-1])
+        for otup in other._vnf:
+            pieces.append(_term_mul(self_h, self_top, 2, otup))
+        for otup in other._cnf:
+            pieces.append(_term_mul(self_h, self_top, 1, otup))
+        if other._nat != 0:
+            pieces.append(_term_mul(self_h, self_top, 0, other._nat))
+            if self_h == 2:
+                rem = ordinal(_vnf = self._vnf[1:], _cnf = self._cnf, _nat = self._nat)
+            elif self_h == 1:
+                rem = ordinal(_cnf = self._cnf[1:], _nat = self._nat)
+            elif self_h == 0:
+                rem = 0
+            pieces.append(rem)
+        return sum_bisected(pieces)
+    def __rmul__(self, other):
+        return ordinal(other) * self
 
 def veblen(sub, value):
     """
@@ -705,7 +843,7 @@ def veblen(sub, value):
     A full explanation will not fit nicely in this doc comment.
     """
     # there might be fixed points!
-    if isinstance(value, ordinal) and len(value._vnf) == 1 and value._vnf[0][0] > sub and value._vnf[0][2] == 1:
+    if isinstance(value, ordinal) and len(value._vnf) == 1 and not value._cnf and not value._nat and value._vnf[0][0] > sub and value._vnf[0][2] == 1:
         # yes, it is a fixed point
         return value
     # do the Veblen stuff normally
@@ -713,6 +851,10 @@ def veblen(sub, value):
         # subscript 0 is the special case that ends the recursive definition
         if value == 0:
             return 1
+        # if ordinal is in the Veblen hierarchy, we must stay in the Veblen hierarchy
+        if isinstance(value, ordinal) and value._vnf:
+            return ordinal(_vnf = [(0, value, 1)])
+        # below epsilon_0
         return ordinal(_cnf = [(value, 1)])
     # otherwise we just build the Veblen normal form directly
     return ordinal(_vnf = [(sub, value, 1)])
