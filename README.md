@@ -15,6 +15,13 @@ This started as just a small project to occupy my time, though it does indeed fi
 
 The project is currently in early development, and no expert mathematicians have reviewed it to make sure all the math is correct.
 
+Contributing
+---
+
+Anyone is welcome to help out and make this library better! Especially programmers who can build more things and expert mathematicians who can check if the implementations match the theory.
+
+The easiest way to contribute, which doesn't need that much programming experience or mathematical background, is to come up with more test cases to the unit tests. Basically a test case is a situation that you expect to happen, and the test script sees if that is actually what happens. The library could always use more scrutinous testing. Who knows, maybe yours will be the one that catches a bug.
+
 Ordinals? Transfinite?
 ---
 We should begin our journey at the concept of transfinite numbers. In short, they are not quite finite, and not quite infinite.
