@@ -615,18 +615,19 @@ class ordinal(ordinal_type):
         asub, aindex, acount = a
         bsub, bindex, bcount = b
         # fixed point unwrapping:
-        #   phi_A (B) <> phi_C (D)
-        # = phi_A (B) <> phi_A (phi_C (D))  where A < C
-        # = B <> phi_C (D)
-        # FIXME it thinks omega^(epsilon_0+1) < epsilon_0 2
+        #   phi_A (B) N <> phi_C (D) M
+        # = phi_A (B) N <> phi_A (phi_C (D)) N + phi_C (D) (-N + M)  where A < C
+        # = phi_A (B) N + phi_C (D) N <> phi_A (phi_C (D)) N + phi_C (D) M
+        # = phi_A (B) N, phi_C (D) N <> phi_A (phi_C (D)) N, phi_C (D) M
+        # = B, N <> phi_C (D), M
         if asub < bsub:
             a2 = aindex
-            b2 = ordinal(_vnf = [b])
-            return _cmp((a2, acount), (b2, 1))
+            b2 = ordinal(_vnf = [b[:-1] + (1,)])
+            return _cmp((a2, acount), (b2, b[-1]))
         if asub > bsub:
-            a2 = ordinal(_vnf = [a])
+            a2 = ordinal(_vnf = [a[:-1] + (1,)])
             b2 = bindex
-            return _cmp((a2, 1), (b2, bcount))
+            return _cmp((a2, a[-1]), (b2, bcount))
         # asub == bsub
         return _cmp((aindex, acount), (bindex, bcount))
     def __lt__(self, other):
