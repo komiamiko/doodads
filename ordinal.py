@@ -552,11 +552,19 @@ class ordinal(ordinal_type):
             self._kind = kind_successor
         # Precompute the tier
         if self._vnf:
+            # for the Veblen hierarchy, tier computation is a bit more complicated
+            # there are fixed points and things that aren't fixed points
+            # roughly, when evaluating phi_A (B) we compare phi_A (0) to B
+            # if B is small, phi_A (B) > phi_A (0) > B
+            # in this case A is more useful for calculating the tier
+            # if B is big, phi_A (B) >= B >= phi_A (0)
+            # in this case B is more useful for calculating the tier
             _tier_sub = tier(self._vnf[0][0])
             _tier_sub = (_tier_sub[0] + 2, _tier_sub[1])
             _tier_index = tier(self._vnf[0][1])
             _tier = max(_tier_sub, _tier_index)
         elif self._cnf:
+            # uses the height of the largest term
             _tier = tier(self._cnf[0][0])
             _tier = (1, (_tier[0] and _tier[1]) + 1)
         else:
