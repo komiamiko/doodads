@@ -147,5 +147,68 @@ class TestOrdinalClass(unittest.TestCase):
         self.assertTrue(omega < epsilon_0)
         self.assertTrue(epsilon_0 < zeta_0)
 
+class TestOrdinalArithmetic(unittest.TestCase):
+
+    def test_addition(self):
+        from ordinal import omega
+
+        self.assertTrue(omega + 1 > omega)
+        self.assertTrue(1 + omega == omega)
+        self.assertTrue(omega + omega > omega + 1)
+        self.assertTrue(omega + 1 + omega == omega + omega)
+
+    def test_multiplication(self):
+        from ordinal import omega
+
+        self.assertTrue(omega * 2 > omega)
+        self.assertTrue(omega * 2 == omega + omega)
+        self.assertTrue(2 * omega == omega)
+        self.assertTrue(omega * omega > omega)
+        self.assertTrue(omega + omega * omega == omega * omega)
+        self.assertTrue(omega * 2 * omega == omega * omega)
+        self.assertTrue((omega + 1) * 3 == omega * 3 + 1)
+        self.assertTrue(3 * (omega + 1) == omega + 3)
+        self.assertTrue((omega + 1) * omega == omega * omega)
+        self.assertTrue(omega * (omega + 1) == omega * omega + omega)
+        self.assertTrue((omega + 2) * (omega + 2) == omega * omega + omega * 2 + 2)
+
+    def test_veblen(self):
+        from ordinal import veblen, omega, epsilon_0, zeta_0
+
+        self.assertTrue(omega == veblen(0, 1))
+        self.assertTrue(epsilon_0 == veblen(1, 0))
+        self.assertTrue(zeta_0 == veblen(2, 0))
+        self.assertTrue(omega * omega == veblen(0, 2))
+        
+        self.assertTrue(veblen(0, omega + 1) == veblen(0, omega) * omega)
+        self.assertTrue(veblen(0, epsilon_0) == epsilon_0)
+        self.assertTrue(veblen(0, epsilon_0 + 1) > epsilon_0)
+        self.assertTrue(veblen(0, epsilon_0 + 1) == epsilon_0 * omega)
+        self.assertTrue(veblen(0, epsilon_0 + 1) * 2 > epsilon_0 * 3)
+        self.assertTrue(veblen(0, epsilon_0 + 1) * 2 > epsilon_0 * omega)
+        self.assertTrue(veblen(0, epsilon_0 + 1) * 2 == epsilon_0 * omega * 2)
+        self.assertTrue(veblen(0, veblen(0, omega)) > veblen(0, omega * omega))
+        self.assertTrue(veblen(0, veblen(0, omega)) < epsilon_0)
+        self.assertTrue(veblen(1, zeta_0) == zeta_0)
+        self.assertTrue(veblen(1, zeta_0 + 1) > zeta_0)
+        self.assertTrue(veblen(1, zeta_0 + 1) > veblen(0, zeta_0 + 1))
+        self.assertTrue(veblen(0, epsilon_0 + 1) < veblen(1, 1))
+        
+        self.assertTrue(veblen(zeta_0, 0) > veblen(omega, 0))
+        self.assertTrue(veblen(zeta_0, 0) < veblen(omega, veblen(zeta_0, 0) + 1))
+        self.assertTrue(veblen(zeta_0, veblen(zeta_0 + 1, 0)) == veblen(zeta_0 + 1, 0))
+        towers = [veblen(veblen(epsilon_0, 0), 0),
+                  veblen(veblen(epsilon_0, 0), 1),
+                  veblen(veblen(epsilon_0, 1), 0)]
+        self.assertTrue(zeta_0 < towers[0])
+        self.assertTrue(towers[0] < towers[1])
+        self.assertTrue(towers[0] < towers[2])
+        self.assertTrue(towers[1] < towers[2])
+        self.assertTrue(veblen(zeta_0, towers[2]) == towers[2])
+        self.assertTrue(veblen(0, towers[2] + 1) > towers[2])
+        self.assertTrue(veblen(omega, towers[2] + 1) > towers[2])
+        self.assertTrue(veblen(epsilon_0, towers[2] + 1) > towers[2])
+        self.assertTrue(veblen(towers[2], towers[1]) > veblen(towers[1], towers[2]))
+
 if __name__ == '__main__':
     unittest.main()

@@ -552,8 +552,10 @@ class ordinal(ordinal_type):
             self._kind = kind_successor
         # Precompute the tier
         if self._vnf:
-            _tier = tier(self._vnf[0][0])
-            _tier = (_tier[0] + 2, _tier[1])
+            _tier_sub = tier(self._vnf[0][0])
+            _tier_sub = (_tier_sub[0] + 2, _tier_sub[1])
+            _tier_index = tier(self._vnf[0][1])
+            _tier = max(_tier_sub, _tier_index)
         elif self._cnf:
             _tier = tier(self._cnf[0][0])
             _tier = (1, (_tier[0] and _tier[1]) + 1)
@@ -763,10 +765,8 @@ class ordinal(ordinal_type):
         if isinstance(other, int):
             if other < 0:
                 raise ValueError('Cannot multiply ordinals by negative numbers')
-            rvnf = [(s, i, c * other) for s,i,c in self._vnf]
-            rcnf = [(p, c * other) for p,c in self._cnf]
-            rnat = self._nat * other
-            return ordinal(_nat = rnat, _cnf = rcnf, _vnf = rvnf)
+            # there's too much rules, don't bother re-implementing
+            other = ordinal(other)
         if not isinstance(other, ordinal):
             raise TypeError('Unknown type trying to multiply an ordinal by')
         pieces = []
@@ -787,7 +787,7 @@ class ordinal(ordinal_type):
             Intended for when the result is known to fall in the Veblen hierarchy.
             """
             up = l_up + r_up
-            if len(up._vnf) == 1 and up._vnf[0][0] != 0 and up._vnf[0][2] == 1:
+            if len(up._vnf) == 1 and not up._cnf and not up._nat and up._vnf[0][0] != 0 and up._vnf[0][2] == 1:
                 uv = up._vnf[0]
                 return ordinal(_vnf = [uv[:-1] + (uv[-1] * rc,)])
             else:
