@@ -1,2 +1,3 @@
 # doodads
-Collection of little bits of code - libraries, scripts, and other things - with a degree of organization but lacking the size to deserve their own repository.
+
+Here is a collection of useful small blobs of code. They aren't so small, standalone, and disorganized that they would fit comfortably in a Gist. Yet they are also too small to sensibly get their own repositories. Here they are roughly categorized and sorted into folders by purpose and function.
