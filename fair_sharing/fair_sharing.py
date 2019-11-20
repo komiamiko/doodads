@@ -2,6 +2,22 @@
 Small library for computing fair sharing sequences for n players.
 """
 
+def fair_sharing(n=2,*args,**kwargs):
+    """
+    Generates a fair sharing sequence which should be exactly correct.
+    For n=2 this is the Thue-Morse sequence so we take a shortcut.
+    The extra args and kwargs are passed on to the next function, if applicable.
+    """
+    import itertools
+    if n < 1:
+        raise ValueError('Require n >= 1')
+    if n == 1:
+        yield from itertools.repeat(0)
+    if n == 2:
+        for k in itertools.count():
+            yield bin(k).count('1') & 1
+    yield from fair_sharing_fast_checked(*args,n=n,**kwargs)
+
 def fair_sharing_fast(n=2,decimals=100,pratio=15,debug=False):
     """
     Generates the fair sharing sequence for n players.
@@ -21,18 +37,14 @@ def fair_sharing_fast(n=2,decimals=100,pratio=15,debug=False):
     wins=[mp.mpf(0)]*n
     if debug:
         print('p = '+str(p))
-    try:
-        for i in itertools.count():
-            index,_ = min(enumerate(wins),key=operator.itemgetter(1))
-            yield index
-            inc=p*(1-acc)
-            wins[index]+=inc
-            acc+=inc
-            if debug:
-                print('acc = '+str(acc))
-    except (Exception,KeyboardInterrupt) as err:
-        print('interrupted at index '+str(i))
-        raise err
+    for i in itertools.count():
+        index,_ = min(enumerate(wins),key=operator.itemgetter(1))
+        yield index
+        inc=p*(1-acc)
+        wins[index]+=inc
+        acc+=inc
+        if debug:
+            print('acc = '+str(acc))
 
 def fair_sharing_fast_checked(decimals=(100,110),*args,**kwargs):
     """
