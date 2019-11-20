@@ -43,3 +43,10 @@ One of the more boring googological functions but a decent introduction to big n
 - A_m(n) = A_m-1(A_m(n-1))
 
 As m gets bigger, this looks like the hyperoperations. A_2(n) is about 2n. A_3(n) is about 2^n. A_4(n) is about 2^2^2^... with n copies of 2, called tetration. A_7198(158386) is clearly too large to fit on a computer.
+
+Other TREE and tree sequences
+---
+
+tree, the weak tree function, plays a game distinct from but related to the TREE game, and tree grows very fast but nowhere near the incomprehensibly fast of TREE.
+
+Friedman's originally presented strategy for TREE(3) would construct those n(4) trees or so, and then it would have only 1 node label left, so from there it can construct about tree(n(4)) more trees. Since then, other serious researchers and hobbyist mathematicians have come up with various other sequences to play the tree game and TREE game with, and produce better lower bounds for TREE(3). Friedman's original one is already so long that nobody could possibly compute it, so as a programmer that just wants to generate a long sequence of trees, you wouldn't really care what strategy you used.
