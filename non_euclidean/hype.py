@@ -98,11 +98,19 @@ class abc_space(object):
     def cos(self, x):
         """
         The cosine function.
+
+        Satisfies:
+        cos(0) = 1
+        d/dx cos(x) = -K sin(x)
         """
         raise NotImplementedError
     def sin(self, x):
         """
         The sine function.
+        
+        Satisfies:
+        sin(0) = 0
+        d/dx sin(x) = cos(x)
         """
         raise NotImplementedError
     def acos(self, x):
@@ -115,6 +123,18 @@ class abc_space(object):
         The inverse sine function.
         """
         raise NotImplementedError
+    def make_origin(self, dimensions):
+        """
+        Make the origin point for N dimensions.
+        """
+        if dimensions < 0:
+            raise ValueError('Cannot have negative dimensional space')
+        math = self.math
+        real = math.real
+        return space_point(
+            self,
+            (to_real(real, 1),) + (to_real(real, 0),) * dimensions
+            )
     def make_point(self, direction, magnitude):
         """
         Take a regular N-dimensional direction unit vector
@@ -153,6 +173,19 @@ class abc_space(object):
         if use_quick:
             return math.acos(point[0])
         return math.asin(functools.reduce(math.hypot, point[1:]))
+    def parallel_transport(self, dest, ref):
+        """
+        What point do we get when parallel transporting
+        ref from the origin to dest?
+        For K = 0, this is just vector addition, and the order does not matter.
+        For other K, however, this operation is in general not commutative.
+        """
+        # TODO implement parallel transport!
+        # I know a cheesy way to do it for dimension N <= 2
+        # but I want to have it implemented more generally
+        # and I heard it's harder for N >= 3
+        # that won't stop me from finding out how!
+        raise NotImplementedError
     def hypot(self, x, y):
         """
         If x and y are lengths of the legs of a right triangle,
@@ -226,3 +259,5 @@ class space_point(object):
         self.x[index] = value
     def __abs__(self):
         return self.home.magnitude_of(self)
+    def __add__(self, other):
+        return self.home.parallel_transport(self, other)
