@@ -12,6 +12,7 @@ If you find a math error, do report it!
 import math
 import functools
 import operator
+import enum
 
 def _require_hash(value):
     """
@@ -33,11 +34,21 @@ class joined_namespace(object):
     Assumes the __dict__ attribute is accessible.
     """
     def __init__(self, *inherits):
+        """
+        Construct from other objects or namespace dicts.
+        """
+        self.join(*inherits)
+    def join(self, *inherits):
+        """
+        Append more objects or namespace dicts.
+        Will overwrite existing data in a conflict.
+        """
         for parent in inherits:
             if isinstance(parent, dict):
                 self.__dict__.update(parent)
             else:
                 self.__dict__.update(parent.__dict__)
+        
 
 def extend_math_namespace(*inherits):
     """
@@ -367,6 +378,8 @@ class abc_space(object):
         and the boundary a "sphere" but most people don't care
         about that difference. We reflect this here by naming
         the method after a sphere even if it really should be a ball.
+
+        Note:
         """
         math = self.math
         real = math.real
@@ -579,6 +592,48 @@ class abc_space(object):
         A = to_real(real, A)
         b = to_real(real, b)
         return math.asin(math.sin(A) / self.sin(a) * self.sin(b))
+    def distance_between(self, p, q):
+        """
+        Computes the distance between 2 points in this space,
+        more specifically, the length of the line segment that would join them.
+        
+        Distance is calculated based on the following equations:
+
+        x^2 = K (p0 - q0)^2 + (p1 + q1)^2 + (p2 + q2)^2 + (p3 + q3)^2 + ...
+        x is an intermediate value representing the model distance
+
+        d = 2 asin(x/2)
+        d is the actual distance
+        """
+        math = self.math
+        real = math.real
+        p = p.x
+        q = q.x
+        n = len(p)
+        if len(q) != n:
+            raise ValueError('Mismatched dimensions in points')
+        x = real(self.curvature) * (p[0] - q[0]) **2 + sum(
+            map((lambda tup:(tup[0] - tup[1])**2), zip(p[1:], q[1:])),
+            start = real(0))
+        return real(2) * self.asin(math.sqrt(x) / real(2))
+
+class _projection_types(enum.Enum):
+    drop_extra_axis = 1
+    preserve_angles = 2
+    preserve_lines = 4
+projection_types = joined_namespace(_projection_types)
+projection_types.join({
+    'drop_first_axis': projection_types.drop_extra_axis,
+    'orthographic': projection_types.drop_extra_axis,
+    'gans': projection_types.drop_extra_axis,
+    'conformal': projection_types.preserve_angles,
+    'stereographic': projection_types.preserve_angles,
+    'poincare': projection_types.preserve_angles,
+    'poincaré': projection_types.preserve_angles,
+    'gnomonic': projection_types.preserve_lines,
+    'klein': projection_types.preserve_lines,
+    'beltrami_klein': projection_types.preserve_lines
+    })
 
 class space_point(object):
     """
@@ -628,4 +683,43 @@ class space_point(object):
             x=(x[0],)+tuple(map(operator.neg, x[1:]))
             )
     def __sub__(self, other):
-        return self + -other
+        return self.home.distance_between(self, other)
+    def project(self, projection_type):
+        """
+        Project this point to the regular boring Euclidean plane
+        using some standard projection.
+        Use projection_type as...
+
+        projection_type = projection_types.drop_extra_axis
+        Simply returns the point vector but with the extra axis stripped off.
+        Corresponds to
+        the elliptic orthographic projection and
+        the hyperbolic Gans projection.
+
+        projection_type = projection_types.preserve_angles
+        Projects from the point (-1, 0, 0, 0, ...)
+        Angles are preserved - a corner with a certain angle will be mapped
+        to a corner with the same angle, etc.
+        Corresponds to
+        the elliptic Stereographic projection and
+        the hyperbolic Poincaré projection.
+
+        projection_type = projection_types.preserve_lines
+        Projects from the origin.
+        Straightness is preserved - a line (geodesic) will be mapped to a line,
+        a polygon to a polygon, etc.
+        Corresponds to
+        the elliptic Gnomonic projection and
+        the hyperbolic Beltrami-Klein projection.
+        """
+        if isinstance(projection_type, str):
+            projection_type = getattr(projection_types, projection_type.lower().replace('-','_').replace(' ','_'))
+        if projection_type == projection_types.drop_extra_axis:
+            return tuple(self.x[1:])
+        if projection_type == projection_types.preserve_angles:
+            ex = self.x[0]
+            return tuple(map((lambda x: x / ex), self.x[1:]))
+        if projection_type == projection_types.preserve_lines:
+            ex = self.x[0] + self.home.math.real(1)
+            return tuple(map((lambda x: x / ex), self.x[1:]))
+        raise ValueError('Projection type unknown')
