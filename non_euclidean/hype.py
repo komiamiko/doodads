@@ -59,6 +59,7 @@ def extend_math_namespace(*inherits):
     - e = exp(1)
     - exp = x -> e^x
     - sqrt = x -> x^(1/2)
+    - cbrt = x -> x^(1/3)
     - hypot = (x,y) -> sqrt(x^2 + y^2)
     - asinh = x -> log(x + sqrt(x^2 + 1))
     - acosh = x -> log(x + sqrt(x^2 - 1))
@@ -82,6 +83,16 @@ def extend_math_namespace(*inherits):
                 return x ** (ns.real(1) / ns.real(2))
             return i_sqrt
         ns.hypot = _sqrt(ns)
+    if not hasattr(ns, 'cbrt'):
+        def _cbrt(ns):
+            def i_cbrt(x, y):
+                """
+                patched math function
+                see docs for math.cbrt
+                """
+                return x ** (ns.real(1) / ns.real(3))
+            return i_cbrt
+        ns.hypot = _cbrt(ns)
     if not hasattr(ns, 'hypot'):
         def _hypot(ns):
             def i_hypot(x, y):
@@ -229,10 +240,10 @@ class abc_space(object):
             direction = tuple(map((lambda x: x / divide_by), direction))
         magnitude = to_real(real, magnitude)
         def map_with(x):
-            return math.sin(preal(x) * magnitude)
+            return self.sin(preal(x) * magnitude)
         return space_point(
             self,
-            (math.cos(magnitude),) + tuple(map(map_with, direction))
+            (self.cos(magnitude),) + tuple(map(map_with, direction))
             )
     def magnitude_of(self, point, use_quick=False):
         """
@@ -254,8 +265,8 @@ class abc_space(object):
         """
         math = self.math
         if use_quick:
-            return math.acos(point[0])
-        return math.asin(functools.reduce(math.hypot, point[1:]))
+            return self.acos(point[0])
+        return self.asin(functools.reduce(math.hypot, point[1:]))
     def parallel_transport(self, dest, ref):
         """
         What point do we get when parallel transporting
@@ -379,7 +390,7 @@ class abc_space(object):
         about that difference. We reflect this here by naming
         the method after a sphere even if it really should be a ball.
 
-        Note:
+        This needs to be taken at the limit for K = 0.
         """
         math = self.math
         real = math.real
@@ -444,7 +455,7 @@ class abc_space(object):
             self.cos(a) * self.cos(b) +
             self.sin(a) * self.sin(b) * math.cos(C) * self.curvature
             )
-    def cosine_law_angle(self, a, b, C):
+    def cosine_law_angle(self, a, b, c):
         """
         A triangle looks like this:
 
@@ -599,7 +610,7 @@ class abc_space(object):
         
         Distance is calculated based on the following equations:
 
-        x^2 = K (p0 - q0)^2 + (p1 + q1)^2 + (p2 + q2)^2 + (p3 + q3)^2 + ...
+        x^2 = K (p0 - q0)^2 + (p1 - q1)^2 + (p2 - q2)^2 + (p3 - q3)^2 + ...
         x is an intermediate value representing the model distance
 
         d = 2 asin(x/2)
@@ -643,7 +654,10 @@ class space_point(object):
     So for example, in 3 dimensions with some K,
     the coordinates are (x0, x1, x2, x3)
     satisfying x0^2 = 1 - K(x1^2 + x2^2 + x3^2)
-    Is mutable.
+    This reflects the "true shape" of the space, for example,
+    the Euclidean plane embeds as a plane,
+    the elliptic plane embeds as a half sphere,
+    and the hyperbolic plane embeds as a hyperboloid.
     """
     def __init__(self, home, x):
         """
@@ -657,6 +671,9 @@ class space_point(object):
         """
         self.home = home
         self.x = list(x) # marks mutable
+        # require extra axis coordinate is not negative
+        if self.x[0] < self.home.math.real(0):
+            self.x = list(map(operator.neg, self.x))
     def __eq__(self, other):
         if self is other:
             return True
@@ -723,3 +740,342 @@ class space_point(object):
             ex = self.x[0] + self.home.math.real(1)
             return tuple(map((lambda x: x / ex), self.x[1:]))
         raise ValueError('Projection type unknown')
+
+class euclidean_space(abc_space):
+    """
+    Represents a space with curvature K = 0.
+    Please do not use this class directly. Instead, use space.
+    """
+    def __init__(self, math):
+        self.math = math
+        self.curvature = 0
+    def sin(self, x):
+        """
+        For K = 0
+        sin(x) = x
+        """
+        return x
+    def cos(self, x):
+        """
+        For K = 0
+        cos(x) = 1
+        """
+        return self.math.real(1)
+    def asin(self, x):
+        """
+        For K = 0
+        sin(x) = x
+        """
+        return x
+    def acos(self, x):
+        """
+        For K = 0
+        cos(x) = 1
+
+        This is a constant function, so it is not invertible.
+        Calling this will result in an error.
+        """
+        raise TypeError('cosine function for K = 0 is a constant function, and cannot be inverted')
+    def parallel_transport(self, dest, ref):
+        """
+        Parallel transport in Euclidean space is easy! It's just regular vector addition.
+        """
+        return space_point(self, (dest[0],) + tuple(map(sum, zip(dest[1:], ref[1:]))))
+    def _hypot(self, x, y):
+        """
+        hypot(x, y)
+        assuming correct types
+        specially implemented for K = 0 as the Pythagorean theorem
+        """
+        math = self.math
+        return math.hypot(x, y)
+    def _leg(self, x, z):
+        """
+        leg(x, z)
+        assuming correct types
+        specially implemented for K = 0 as the Pythagorean theorem
+        """
+        math = self.math
+        return math.sqrt(z*z - x*x)
+    def magnitude_of(self, point, use_quick=False):
+        """
+        Return the magnitude of a point in this space, or rather,
+        its distance to the origin.
+
+        For K = 0, this is the norm of the vector.
+
+        use_quick flag is ignored.
+        """
+        return abc_space.magnitude_of(self, point, False)
+    def sphere_v3(self, r):
+        """
+        Mass of the 3D interior of the 3-sphere.
+        Commonly called the volume of a sphere.
+
+        Specially implemented for K = 0.
+
+        To be pedantic, mathematicians call the inside a "ball"
+        and the boundary a "sphere" but most people don't care
+        about that difference. We reflect this here by naming
+        the method after a sphere even if it really should be a ball.
+        """
+        math = self.math
+        real = math.real
+        r = to_real(real, r)
+        return real(2) / real(3) * math.tau * r**3
+    def inv_sphere_v3(self, m):
+        """
+        Inverts sphere_v3
+        Note: this is difficult in general, because it can't be
+        expressed in terms of common functions
+        """
+        math = self.math
+        real = math.real
+        m = to_real(real, m)
+        return math.cbrt(m / (real(2) / real(3) * math.tau))
+    def cosine_law_side(self, a, b, C):
+        """
+        A triangle looks like this:
+
+             c
+        A -------- B
+         \     __/
+        b \ __/  a
+           C
+
+        By convention, lowercase letter is used to mean the side length
+        opposite a vertex, and the uppercase letter is used to mean the
+        angle of that vertex.
+
+        The cosine law relates a, b, c, and C:
+        (specific to K = 0)
+
+        c^2 = a^2 + b^2 - 2 a b cos*(C)
+        *regular trig
+
+        This specific method takes a, b, C and computes c.
+        """
+        math = self.math
+        real = math.real
+        a = to_real(real, a)
+        b = to_real(real, b)
+        C = to_real(real, C)
+        return self.sqrt(a*a + b*b - a*b*real(2)*math.cos(C))
+    def cosine_law_angle(self, a, b, c):
+        """
+        A triangle looks like this:
+
+             c
+        A -------- B
+         \     __/
+        b \ __/  a
+           C
+
+        By convention, lowercase letter is used to mean the side length
+        opposite a vertex, and the uppercase letter is used to mean the
+        angle of that vertex.
+
+        The cosine law relates a, b, c, and C:
+        (specific to K = 0)
+
+        c^2 = a^2 + b^2 - 2 a b cos*(C)
+        *regular trig
+
+        This specific method takes a, b, c and computes C.
+        """
+        math = self.math
+        real = math.real
+        a = to_real(real, a)
+        b = to_real(real, b)
+        c = to_real(real, c)
+        return math.acos((a*a + b*b - c*c)/(a*b*real(2)))
+    def dual_cosine_law_angle(self, A, B, c):
+        """
+        A triangle looks like this:
+
+             c
+        A -------- B
+         \     __/
+        b \ __/  a
+           C
+
+        By convention, lowercase letter is used to mean the side length
+        opposite a vertex, and the uppercase letter is used to mean the
+        angle of that vertex.
+
+        The dual cosine law (not the original cosine law)
+        relates A, B, C, and c:
+
+        cos*(C) = - cos*(A) cos*(B) + sin*(A) sin*(B) cos(c)
+        * not the spatial trig function, always the regular trig function
+
+        This specific method takes A, B, c and computes C.
+
+        Note that in K = 0 this is redundant, since the interior angles
+        always sum to a half turn. The side length c is not needed.
+        """
+        math = self.math
+        real = math.real
+        A = to_real(real, A)
+        B = to_real(real, B)
+        return math.pi - A - B
+    def dual_cosine_law_side(self, A, B, C):
+        """
+        A triangle looks like this:
+
+             c
+        A -------- B
+         \     __/
+        b \ __/  a
+           C
+
+        By convention, lowercase letter is used to mean the side length
+        opposite a vertex, and the uppercase letter is used to mean the
+        angle of that vertex.
+
+        The dual cosine law (not the original cosine law)
+        relates A, B, C, and c:
+
+        cos*(C) = - cos*(A) cos*(B) + sin*(A) sin*(B) cos(c)
+        * not the spatial trig function, always the regular trig function
+
+        Does not work in K = 0.
+
+        This specific method takes A, B, C and computes c.
+        """
+        raise TypeError('Dual cosine law breaks down at K = 0, as knowing only the angles it is impossible to determine a side length')
+
+class elliptic_space(abc_space):
+    """
+    Represents a space with curvature K = 1.
+    Please do not use this class directly. Instead, use space.
+    """
+    def __init__(self, math):
+        self.math = math
+        self.curvature = 1
+
+class hyperbolic_space(abc_space):
+    """
+    Represents a space with curvature K = -1.
+    Please do not use this class directly. Instead, use space.
+    """
+    def __init__(self, math):
+        self.math = math
+        self.curvature = -1
+
+class space(abc_space):
+    """
+    The unified space class! Works for spaces with constant curvature.
+    Just give it a math context and a curvature and it will take care of the rest.
+    """
+    def __init__(self, math, curvature):
+        """
+        Construct a space.
+
+        Note: to avoid confusion in higher dimensions, we
+        make the curvature a 1D quantity always, with dimension 1 / L.
+        This means, for example, if you are working in metres,
+        and the true curvature is -4 / m^2 in 2 dimensions,
+        you should set K = -2.
+        Similarly, if the curvature is 16 / m^4 in 4 dimensions,
+        you should set K = 2.
+        Euclidean is always K = 0, elliptic is K > 0, hyperbolic is K < 0.
+        Sorry about the uncommon convention!
+        This convention lets us avoid taking roots needlessly and simplifies math.
+        """
+        self.math = math
+        self.curvature = curvature
+        if curvature == 0:
+            self.base = euclidean_space
+            self.scale = math.real(1)
+        elif curvature > 0:
+            self.base = elliptic_space
+            self.scale = math.real(1) / math.real(curvature)
+        else:
+            self.base = hyperbolic_space
+            self.scale = - math.real(1) / math.real(curvature)
+    
+    def cos(self, x):
+        """
+        The cosine function.
+
+        Satisfies:
+        cos(0) = 1
+        d/dx cos(x) = -K sin(x)
+        """
+        base = self.base
+        math = self.math
+        real = math.real
+        x = to_real(real, x)
+        return base.cos(self, x / self.curvature)
+    def sin(self, x):
+        """
+        The sine function.
+        
+        Satisfies:
+        sin(0) = 0
+        d/dx sin(x) = cos(x)
+        """
+        base = self.base
+        math = self.math
+        real = math.real
+        x = to_real(real, x)
+        return base.sin(self, x / self.curvature) * self.curvature
+    def acos(self, x):
+        """
+        The inverse cosine function.
+        """
+        base = self.base
+        math = self.math
+        real = math.real
+        x = to_real(real, x)
+        return base.acos(self, x) * self.curvature
+    def asin(self, x):
+        """
+        The inverse sine function.
+        """
+        base = self.base
+        math = self.math
+        real = math.real
+        x = to_real(real, x)
+        return base.asin(self, x / self.curvature) * self.curvature
+    def _hypot(self, x, y):
+        """
+        hypot(x, y)
+        assuming correct types
+        """
+        return self.base._hypot(self, x / self.scale, y / self.scale) * self.scale
+    def _leg(self, x, z):
+        """
+        leg(x, z)
+        assuming correct types
+        """
+        return self.base._leg(self, x / self.scale, y / self.scale) * self.scale
+    def sphere_s1(self, r):
+        return self.base.sphere_s1(self, r)
+    def inv_sphere_s1(self, m):
+        return self.base.inv_sphere_s1(self, r)
+    def sphere_v2(self, r):
+        return self.base.sphere_v2(self, r)
+    def inv_sphere_v2(self, m):
+        return self.base.inv_sphere_v2(self, r)
+    def sphere_s2(self, r):
+        return self.base.sphere_s2(self, r)
+    def inv_sphere_s2(self, m):
+        return self.base.inv_sphere_s1(self, r)
+    def sphere_v3(self, r):
+        return self.base.sphere_v3(self, r)
+    def inv_sphere_v3(self, m):
+        return self.base.inv_sphere_v3(self, r)
+    def cosine_law_side(self, a, b, C):
+        return self.base.cosine_law_side(self, a, b, C)
+    def cosine_law_angle(self, a, b, c):
+        return self.base.cosine_law_angle(self, a, b, c)
+    def dual_cosine_law_angle(self, A, B, c):
+        return self.base.dual_cosine_law_angle(self, A, B, c)
+    def dual_cosine_law_side(self, A, B, C):
+        return self.base.dual_cosine_law_side(self, A, B, C)
+    def sine_law_side(self, a, A, B):
+        return self.base.sine_law_side(self, a, A, B)
+    def sine_law_angle(self, a, A, b):
+        return self.base.sine_law_angle(self, a, A, b)
