@@ -5,6 +5,8 @@ Small library for geometry in Euclidean, elliptic, and hyperbolic spaces.
 Does point arithmetic, trigonometric functions, and common geometric equations.
 Supports using different math contexts.
 
+WARNING: This library is still a work in progress! Don't assume that everything works perfectly. There may be incorrect math.
+
 This library has not been thoroughly tested to work correctly for all curvatures.
 If you find a math error, do report it!
 """
