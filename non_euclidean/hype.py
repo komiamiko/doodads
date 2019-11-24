@@ -611,7 +611,10 @@ class abc_space(object):
         
         Distance is calculated based on the following equations:
 
-        x^2 = K (p0 - q0)^2 + (p1 - q1)^2 + (p2 - q2)^2 + (p3 - q3)^2 + ...
+        k = K^2
+          because we chose to use negative K instead of imaginary,
+          this looks like K |K| instead
+        x^2 = 1/k (p0 - q0)^2 + (p1 - q1)^2 + (p2 - q2)^2 + (p3 - q3)^2 + ...
         x is an intermediate value representing the model distance
 
         d = 2 asin(x/2)
@@ -624,7 +627,9 @@ class abc_space(object):
         n = len(p)
         if len(q) != n:
             raise ValueError('Mismatched dimensions in points')
-        x = real(self.curvature) * (p[0] - q[0]) **2 + sum(
+        curvature_k = real(self.curvature)
+        curvature_k = curvature_k * abs(curvature_k)
+        x = (p[0] - q[0])**2 / curvature_k + sum(
             map((lambda tup:(tup[0] - tup[1])**2), zip(p[1:], q[1:])),
             real(0))
         return real(2) * self.asin(math.sqrt(x) / real(2))
@@ -949,6 +954,21 @@ class euclidean_space(abc_space):
         This specific method takes A, B, C and computes c.
         """
         raise TypeError('Dual cosine law breaks down at K = 0, as knowing only the angles it is impossible to determine a side length')
+    def distance_between(self, p, q):
+        """
+        Computes the distance between 2 points in this space,
+        more specifically, the length of the line segment that would join them.
+
+        For K = 0, this is just the magnitude of the vector difference.
+        """
+        math = self.math
+        return functools.reduce(
+            math.hypot,
+            map(
+                (lambda tup:(tup[0] - tup[1])**2),
+                zip(p[1:], q[1:])
+                )
+            )
 
 class elliptic_space(abc_space):
     """
@@ -1072,7 +1092,7 @@ class space(abc_space):
         """
         Construct a space.
 
-        Note: to avoid confusion in higher dimensions, we
+        Note: we use a convention here that we
         make the curvature a 1D quantity always, with dimension 1 / L.
         This means, for example, if you are working in metres,
         and the true curvature is -4 / m^2 in 2 dimensions,
@@ -1080,8 +1100,14 @@ class space(abc_space):
         Similarly, if the curvature is 16 / m^4 in 4 dimensions,
         you should set K = 2.
         Euclidean is always K = 0, elliptic is K > 0, hyperbolic is K < 0.
-        Sorry about the uncommon convention!
-        This convention lets us avoid taking roots needlessly and simplifies math.
+        The benefits of this convention is that it makes the expression
+        of curvature independent of the dimensionality of the space,
+        and it avoids using complex numbers, as if you wanted, say
+        the true 2D curvature to be -1 / m^2
+        then the radius of curvature would need to be i m.
+        The trade-off, of course, is that some of the numerical math formulas
+        used to ultimately correct for this difference, look less like
+        the true formulas.
         """
         self.math = math
         self.curvature = curvature
