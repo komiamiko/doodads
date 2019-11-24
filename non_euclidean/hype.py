@@ -49,7 +49,6 @@ class joined_namespace(object):
             else:
                 self.__dict__.update(parent.__dict__)
         
-
 def extend_math_namespace(*inherits):
     """
     Construct a math library like namespace.
@@ -82,7 +81,7 @@ def extend_math_namespace(*inherits):
                 """
                 return x ** (ns.real(1) / ns.real(2))
             return i_sqrt
-        ns.hypot = _sqrt(ns)
+        ns.sqrt = _sqrt(ns)
     if not hasattr(ns, 'cbrt'):
         def _cbrt(ns):
             def i_cbrt(x, y):
@@ -92,7 +91,7 @@ def extend_math_namespace(*inherits):
                 """
                 return x ** (ns.real(1) / ns.real(3))
             return i_cbrt
-        ns.hypot = _cbrt(ns)
+        ns.cbrt = _cbrt(ns)
     if not hasattr(ns, 'hypot'):
         def _hypot(ns):
             def i_hypot(x, y):
@@ -123,6 +122,7 @@ def extend_math_namespace(*inherits):
                 return ns.log(x + ns.sqrt(x*x - ns.real(1)))
             return i_acosh
         ns.asinh = _acosh(ns)
+    return ns
 
 common_math = extend_math_namespace(math, {'real': float})
 
@@ -234,16 +234,17 @@ class abc_space(object):
         math = self.math
         real = math.real
         preal = functools.partial(to_real, real)
+        direction = tuple(map(preal, direction))
         if normalize:
-            direction = tuple(map(preal, direction))
             divide_by = functools.reduce(math.hypot, direction)
             direction = tuple(map((lambda x: x / divide_by), direction))
-        magnitude = to_real(real, magnitude)
-        def map_with(x):
-            return self.sin(preal(x) * magnitude)
+        magnitude = preal(magnitude)
+        cm = self.cos(magnitude)
+        sm = self.sin(magnitude)
+        map_with = functools.partial(operator.mul, sm)
         return space_point(
             self,
-            (self.cos(magnitude),) + tuple(map(map_with, direction))
+            (cm,) + tuple(map(map_with, direction))
             )
     def magnitude_of(self, point, use_quick=False):
         """
@@ -625,7 +626,7 @@ class abc_space(object):
             raise ValueError('Mismatched dimensions in points')
         x = real(self.curvature) * (p[0] - q[0]) **2 + sum(
             map((lambda tup:(tup[0] - tup[1])**2), zip(p[1:], q[1:])),
-            start = real(0))
+            real(0))
         return real(2) * self.asin(math.sqrt(x) / real(2))
 
 class _projection_types(enum.Enum):
@@ -674,6 +675,10 @@ class space_point(object):
         # require extra axis coordinate is not negative
         if self.x[0] < self.home.math.real(0):
             self.x = list(map(operator.neg, self.x))
+    def __repr__(self):
+        return 'space_point('+repr(self.home)+', '+repr(self.x)+')'
+    def __str__(self):
+        return str(self.x)
     def __eq__(self, other):
         if self is other:
             return True
@@ -953,6 +958,61 @@ class elliptic_space(abc_space):
     def __init__(self, math):
         self.math = math
         self.curvature = 1
+    def cos(self, x):
+        """
+        The cosine function.
+
+        Satisfies:
+        cos(0) = 1
+        d/dx cos(x) = -K sin(x)
+        """
+        math = self.math
+        real = math.real
+        x = to_real(real, x)
+        return math.cos(x)
+    def sin(self, x):
+        """
+        The sine function.
+        
+        Satisfies:
+        sin(0) = 0
+        d/dx sin(x) = cos(x)
+        """
+        math = self.math
+        real = math.real
+        x = to_real(real, x)
+        return math.sin(x)
+    def acos(self, x):
+        """
+        The inverse cosine function.
+        """
+        math = self.math
+        real = math.real
+        x = to_real(real, x)
+        return math.acos(x)
+    def asin(self, x):
+        """
+        The inverse sine function.
+        """
+        math = self.math
+        real = math.real
+        x = to_real(real, x)
+        return math.asin(x)
+    def distance_between(self, p, q):
+        """
+        Computes the distance between 2 points in this space,
+        more specifically, the length of the line segment that would join them.
+
+        In elliptic space specifically, there are great circles instead (or higher dimensional analogs),
+        so the line when extended will loop around,
+        and maybe the other direction is actually a shorter distance!
+
+        Note: this method actually breaks on its own,
+        because it accesses the attribute .scale .
+        It can only be used from the space class.
+        """
+        dist = abc_space.distance_between(self, p, q)
+        return min(dist, self.math.pi * self.scale - dist)
 
 class hyperbolic_space(abc_space):
     """
@@ -962,13 +1022,53 @@ class hyperbolic_space(abc_space):
     def __init__(self, math):
         self.math = math
         self.curvature = -1
+    def cos(self, x):
+        """
+        The cosine function.
+
+        Satisfies:
+        cos(0) = 1
+        d/dx cos(x) = -K sin(x)
+        """
+        math = self.math
+        real = math.real
+        x = to_real(real, x)
+        return math.cosh(x)
+    def sin(self, x):
+        """
+        The sine function.
+        
+        Satisfies:
+        sin(0) = 0
+        d/dx sin(x) = cos(x)
+        """
+        math = self.math
+        real = math.real
+        x = to_real(real, x)
+        return math.sinh(x)
+    def acos(self, x):
+        """
+        The inverse cosine function.
+        """
+        math = self.math
+        real = math.real
+        x = to_real(real, x)
+        return math.acosh(x)
+    def asin(self, x):
+        """
+        The inverse sine function.
+        """
+        math = self.math
+        real = math.real
+        x = to_real(real, x)
+        return math.asinh(x)
 
 class space(abc_space):
     """
     The unified space class! Works for spaces with constant curvature.
     Just give it a math context and a curvature and it will take care of the rest.
     """
-    def __init__(self, math, curvature):
+    def __init__(self, curvature, math = common_math):
         """
         Construct a space.
 
@@ -994,7 +1094,23 @@ class space(abc_space):
         else:
             self.base = hyperbolic_space
             self.scale = - math.real(1) / math.real(curvature)
-    
+    def __repr__(self):
+        if self.math == common_math:
+            ext = ''
+        else:
+            ext = ', math = ' + repr(self.math)
+        return 'space(' + repr(self.curvature) + ext + ')'
+    def __str__(self):
+        if self.curvature == 0:
+            res = 'R'
+        elif self.curvature > 0:
+            res = 'E'
+        else:
+            res = 'H'
+        if self.scale != self.math.real(1):
+            res = '(' + res + '*' + str(self.scale) + ')'
+        res = res + '^n'
+        return res
     def cos(self, x):
         """
         The cosine function.
@@ -1007,7 +1123,7 @@ class space(abc_space):
         math = self.math
         real = math.real
         x = to_real(real, x)
-        return base.cos(self, x / self.curvature)
+        return base.cos(self, x / self.scale)
     def sin(self, x):
         """
         The sine function.
@@ -1020,7 +1136,7 @@ class space(abc_space):
         math = self.math
         real = math.real
         x = to_real(real, x)
-        return base.sin(self, x / self.curvature) * self.curvature
+        return base.sin(self, x / self.scale) * self.scale
     def acos(self, x):
         """
         The inverse cosine function.
@@ -1029,7 +1145,7 @@ class space(abc_space):
         math = self.math
         real = math.real
         x = to_real(real, x)
-        return base.acos(self, x) * self.curvature
+        return base.acos(self, x) * self.scale
     def asin(self, x):
         """
         The inverse sine function.
@@ -1038,7 +1154,7 @@ class space(abc_space):
         math = self.math
         real = math.real
         x = to_real(real, x)
-        return base.asin(self, x / self.curvature) * self.curvature
+        return base.asin(self, x / self.scale) * self.scale
     def _hypot(self, x, y):
         """
         hypot(x, y)
@@ -1079,3 +1195,5 @@ class space(abc_space):
         return self.base.sine_law_side(self, a, A, B)
     def sine_law_angle(self, a, A, b):
         return self.base.sine_law_angle(self, a, A, b)
+    def distance_between(self, p, q):
+        return self.base.distance_between(self, p, q)
