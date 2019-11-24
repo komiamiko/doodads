@@ -440,7 +440,10 @@ class abc_space(object):
 
         The cosine law relates a, b, c, and C:
 
-        cos(c) = cos(a) cos(b) + K sin(a) sin(b) cos*(C)
+        k = K^2
+          because we chose to use negative K instead of imaginary,
+          this looks like K |K| instead
+        cos(c) = cos(a) cos(b) + k sin(a) sin(b) cos*(C)
         * not the spatial trig function, always the regular trig function
         (formula not verified)
         The equation degenerates at K=0 and needs to be taken at the limit.
@@ -452,9 +455,11 @@ class abc_space(object):
         a = to_real(real, a)
         b = to_real(real, b)
         C = to_real(real, C)
+        curvature_k = real(self.curvature)
+        curvature_k = curvature_k * abs(curvature_k)
         return self.acos(
             self.cos(a) * self.cos(b) +
-            self.sin(a) * self.sin(b) * math.cos(C) * self.curvature
+            self.sin(a) * self.sin(b) * math.cos(C) * curvature_k
             )
     def cosine_law_angle(self, a, b, c):
         """
@@ -472,7 +477,10 @@ class abc_space(object):
 
         The cosine law relates a, b, c, and C:
 
-        cos(c) = cos(a) cos(b) + K sin(a) sin(b) cos*(C)
+        k = K^2
+          because we chose to use negative K instead of imaginary,
+          this looks like K |K| instead
+        cos(c) = cos(a) cos(b) + k sin(a) sin(b) cos*(C)
         * not the spatial trig function, always the regular trig function
         (formula not verified)
         The equation degenerates at K=0 and needs to be taken at the limit.
@@ -484,9 +492,11 @@ class abc_space(object):
         a = to_real(real, a)
         b = to_real(real, b)
         c = to_real(real, c)
+        curvature_k = real(self.curvature)
+        curvature_k = curvature_k * abs(curvature_k)
         return math.acos(
             (self.cos(c) - self.cos(a) * self.cos(b)) /
-            (self.sin(a) * self.sin(b) * self.curvature)
+            (self.sin(a) * self.sin(b) * curvature_k)
             )
     def dual_cosine_law_angle(self, A, B, c):
         """
