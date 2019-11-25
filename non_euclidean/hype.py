@@ -74,7 +74,7 @@ def extend_math_namespace(*inherits):
         ns.exp = functools.partial(operator.pow, ns.e)
     if not hasattr(ns, 'sqrt'):
         def _sqrt(ns):
-            def i_sqrt(x, y):
+            def i_sqrt(x):
                 """
                 patched math function
                 see docs for math.sqrt
@@ -84,12 +84,17 @@ def extend_math_namespace(*inherits):
         ns.sqrt = _sqrt(ns)
     if not hasattr(ns, 'cbrt'):
         def _cbrt(ns):
-            def i_cbrt(x, y):
+            def i_cbrt(x):
                 """
                 patched math function
                 see docs for math.cbrt
                 """
-                return x ** (ns.real(1) / ns.real(3))
+                invert = x < 0
+                x = abs(x)
+                result = x ** (ns.real(1) / ns.real(3))
+                if invert:
+                    result = -result
+                return result
             return i_cbrt
         ns.cbrt = _cbrt(ns)
     if not hasattr(ns, 'hypot'):
@@ -252,7 +257,10 @@ class abc_space(object):
         its distance to the origin.
 
         Based on the point identity:
-        x0^2 = 1 - K ( x1^2 + ... + xk^2 )
+        k = K^2
+          because we chose to use negative K instead of imaginary,
+          this looks like K |K| instead
+        x0^2 = 1 - k ( x1^2 + ... + xk^2 )
         and the knowledge that the point
         (cos(t), sin(t), 0, 0, ..., 0)
         represents a point t away from the origin along the first axis,
@@ -267,7 +275,7 @@ class abc_space(object):
         math = self.math
         if use_quick:
             return self.acos(point[0])
-        return self.asin(functools.reduce(math.hypot, point[1:]))
+        return self.asin(abs(functools.reduce(math.hypot, point[1:])))
     def parallel_transport(self, dest, ref):
         """
         What point do we get when parallel transporting
@@ -972,13 +980,10 @@ class euclidean_space(abc_space):
         For K = 0, this is just the magnitude of the vector difference.
         """
         math = self.math
-        return functools.reduce(
-            math.hypot,
-            map(
+        return math.sqrt(sum(map(
                 (lambda tup:(tup[0] - tup[1])**2),
                 zip(p[1:], q[1:])
-                )
-            )
+                )))
 
 class elliptic_space(abc_space):
     """
@@ -1203,6 +1208,8 @@ class space(abc_space):
         assuming correct types
         """
         return self.base._leg(self, x / self.scale, y / self.scale) * self.scale
+    def magnitude_of(self, point, use_quick=False):
+        return self.base.magnitude_of(self, point, use_quick=use_quick)
     def sphere_s1(self, r):
         return self.base.sphere_s1(self, r)
     def inv_sphere_s1(self, m):
