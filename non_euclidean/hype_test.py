@@ -446,7 +446,66 @@ class TestSpacePoint(unittest.TestCase):
                         d,
                         abs_tol = 1e-15
                         ))
-            
+
+class TestTriangles(unittest.TestCase):
+    """
+    Triangles and trigonometry form some foundation for geometry.
+    This collection of tests checks various known triangles and sees
+    if the math can correctly solve them.
+    """
+    pass # TODO
+
+class TestSpheres(unittest.TestCase):
+    """
+    N-dimensional spheres (and balls, to be pedantic)
+    are another simple geometric object.
+    Are the surface and volume calculations, and their inverses, correct?
+    This collection of tests is for just that.
+    """
+    def test_vs_small(self):
+        """
+        Test for 2-spheres and 3-spheres the
+        forward and backwards formulas
+        EXCEPT non-Euclidean inverse 3-sphere volume.
+        Tests against known vectors, and tests scaling under different curvature.
+        """
+        pass # TODO
+    def test_root_find(self):
+        """
+        Tests specifically the non-Euclidean inverse 3-sphere volume.
+        There is no exact solution in terms of common math functions,
+        so a root finding method must be used instead.
+        This test measures the accuracy of the root finder when
+        applied to this problem.
+        """
+        pass # TODO
+
+class TestPointOperations(unittest.TestCase):
+    """
+    Collection of tests focusing on operations on space points.
+    """
+    def test_parallel_transport(self):
+        pass # TODO
+    def test_polygon_walk(self):
+        pass # TODO
+    def test_metric(self):
+        pass # TODO
+    def test_project(self):
+        pass # TODO
+
+class TestMPMath(unittest.TestCase):
+    """
+    Another provided math context runs on the mpmath library.
+    This collection of test cases ensures that the math
+    does hold up under a different math context.
+    It is assumed that all math is known to work correctly already
+    under the common math context, so all we test for is whether
+    the extra precision is respected.
+    Presumably if it works in the mpmath context it will work
+    in any math context.
+    """
+    pass # TODO
+
 # run unittest's main
 if __name__ == '__main__':
     unittest.main()
