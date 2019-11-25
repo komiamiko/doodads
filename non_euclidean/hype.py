@@ -128,6 +128,21 @@ def extend_math_namespace(*inherits):
                 return ns.log(x + ns.sqrt(x*x - ns.real(1)))
             return i_acosh
         ns.asinh = _acosh(ns)
+    if not hasattr(ns, 're'):
+        def _re(ns):
+            def i_re(z):
+                """
+                The Re function that extracts the real component of a complex number.
+                """
+                try:
+                    return ns.real(z)
+                except:
+                    pass
+                if hasattr(z, 'real'):
+                    return z.real
+                raise TypeError('Don\'t know how to get the real component of that')
+            return i_re
+        ns.re = _re(ns)
     return ns
 
 common_math = extend_math_namespace(math, {'real': float})
@@ -258,10 +273,7 @@ class abc_space(object):
         its distance to the origin.
 
         Based on the point identity:
-        k = K^2
-          because we chose to use negative K instead of imaginary,
-          this looks like K |K| instead
-        x0^2 = 1 - k ( x1^2 + ... + xk^2 )
+        x0^2 = 1 - K ( x1^2 + ... + xk^2 )
         and the knowledge that the point
         (cos(t), sin(t), 0, 0, ..., 0)
         represents a point t away from the origin along the first axis,
@@ -401,9 +413,7 @@ class abc_space(object):
         math = self.math
         real = math.real
         r = to_real(real, r)
-        curvature_k = to_real(real, self.curvature)
-        curvature_k = curvature_k * abs(curvature_k)
-        return math.tau / curvature_k * (r - self.sin(r * real(2)) / real(2))
+        return math.tau / real(self.curvature) * (r - self.sin(r * real(2)) / real(2))
     def inv_sphere_v3(self, m):
         """
         Inverts sphere_v3
@@ -465,10 +475,7 @@ class abc_space(object):
 
         The cosine law relates a, b, c, and C:
 
-        k = K^2
-          because we chose to use negative K instead of imaginary,
-          this looks like K |K| instead
-        cos(c) = cos(a) cos(b) + k sin(a) sin(b) cos*(C)
+        cos(c) = cos(a) cos(b) + K sin(a) sin(b) cos*(C)
         * not the spatial trig function, always the regular trig function
         (formula not verified)
         The equation degenerates at K=0 and needs to be taken at the limit.
@@ -480,11 +487,9 @@ class abc_space(object):
         a = to_real(real, a)
         b = to_real(real, b)
         C = to_real(real, C)
-        curvature_k = real(self.curvature)
-        curvature_k = curvature_k * abs(curvature_k)
         return self.acos(
             self.cos(a) * self.cos(b) +
-            self.sin(a) * self.sin(b) * math.cos(C) * curvature_k
+            self.sin(a) * self.sin(b) * math.cos(C) * real(self.curvature)
             )
     def cosine_law_angle(self, a, b, c):
         """
@@ -502,10 +507,7 @@ class abc_space(object):
 
         The cosine law relates a, b, c, and C:
 
-        k = K^2
-          because we chose to use negative K instead of imaginary,
-          this looks like K |K| instead
-        cos(c) = cos(a) cos(b) + k sin(a) sin(b) cos*(C)
+        cos(c) = cos(a) cos(b) + K sin(a) sin(b) cos*(C)
         * not the spatial trig function, always the regular trig function
         (formula not verified)
         The equation degenerates at K=0 and needs to be taken at the limit.
@@ -517,11 +519,9 @@ class abc_space(object):
         a = to_real(real, a)
         b = to_real(real, b)
         c = to_real(real, c)
-        curvature_k = real(self.curvature)
-        curvature_k = curvature_k * abs(curvature_k)
         return math.acos(
             (self.cos(c) - self.cos(a) * self.cos(b)) /
-            (self.sin(a) * self.sin(b) * curvature_k)
+            (self.sin(a) * self.sin(b) * real(self.curvature))
             )
     def dual_cosine_law_angle(self, A, B, c):
         """
@@ -646,10 +646,7 @@ class abc_space(object):
         
         Distance is calculated based on the following equations:
 
-        k = K^2
-          because we chose to use negative K instead of imaginary,
-          this looks like K |K| instead
-        x^2 = 1/k (p0 - q0)^2 + (p1 - q1)^2 + (p2 - q2)^2 + (p3 - q3)^2 + ...
+        x^2 = 1/K (p0 - q0)^2 + (p1 - q1)^2 + (p2 - q2)^2 + (p3 - q3)^2 + ...
         x is an intermediate value representing the model distance
 
         d = 2 asin(x/2)
@@ -662,9 +659,7 @@ class abc_space(object):
         n = len(p)
         if len(q) != n:
             raise ValueError('Mismatched dimensions in points')
-        curvature_k = real(self.curvature)
-        curvature_k = curvature_k * abs(curvature_k)
-        x = (p[0] - q[0])**2 / curvature_k + sum(
+        x = (p[0] - q[0])**2 / real(self.curvature) + sum(
             map((lambda tup:(tup[0] - tup[1])**2), zip(p[1:], q[1:])),
             real(0))
         return real(2) * self.asin(math.sqrt(x) / real(2))
@@ -1198,38 +1193,42 @@ class space(abc_space):
     The unified space class! Works for spaces with constant curvature.
     Just give it a math context and a curvature and it will take care of the rest.
     """
-    def __init__(self, curvature, math = common_math):
+    def __init__(self, curvature = None, fake_curvature = None, radius = None, math = common_math):
         """
         Construct a space.
 
-        Note: we use a convention here that we
-        make the curvature a 1D quantity always, with dimension 1 / L.
-        This means, for example, if you are working in metres,
-        and the true curvature is -4 / m^2 in 2 dimensions,
-        you should set K = -2.
-        Similarly, if the curvature is 16 / m^4 in 4 dimensions,
-        you should set K = 2.
-        Euclidean is always K = 0, elliptic is K > 0, hyperbolic is K < 0.
-        The benefits of this convention is that it makes the expression
-        of curvature independent of the dimensionality of the space,
-        and it avoids using complex numbers, as if you wanted, say
-        the true 2D curvature to be -1 / m^2
-        then the radius of curvature would need to be i m.
-        The trade-off, of course, is that some of the numerical math formulas
-        used to ultimately correct for this difference, look less like
-        the true formulas.
+        Note: curvature is inherently a 2D quantity.
+        It may sound counterintuitive that an N-dimensional space
+        is always described with a 2D quantity, but that's how it works.
+        The curvature is defined as
+        K = 1/R^2
+        where R is the radius of curvature.
+        This means that K = 0 requires an infinite radius,
+        and K < 0 requires an imaginary radius.
+
+        We also allow for constructing from a "fake curvature",
+        a 1D quantity k satisfying
+        K = k |k|
+        This allows for avoiding imaginary numbers.
         """
         self.math = math
+        if sum(map((lambda x:x is not None), (curvature, fake_curvature, radius))) != 1:
+            raise ValueError('Must provide exactly 1 value specifying the curvature')
+        if radius is not None:
+            # important! this must coerce K to a real number, not complex
+            curvature = math.re(math.real(1) / (radius * radius))
+        if fake_curvature is not None:
+            curvature = fake_curvature * abs(fake_curvature)
         self.curvature = curvature
         if curvature == 0:
             self.base = euclidean_space
             self.scale = math.real(1)
         elif curvature > 0:
             self.base = elliptic_space
-            self.scale = math.real(1) / math.real(curvature)
+            self.scale = math.real(1) / math.sqrt(math.real(curvature))
         else:
             self.base = hyperbolic_space
-            self.scale = - math.real(1) / math.real(curvature)
+            self.scale = math.real(1) / math.sqrt(-math.real(curvature))
     def __repr__(self):
         if self.math == common_math:
             ext = ''

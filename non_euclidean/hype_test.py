@@ -227,6 +227,14 @@ class TestExtendedMath(unittest.TestCase):
             e_ref
             ))
 
+        # re
+
+        self.assertTrue(common_math.re(0) == 0)
+        self.assertTrue(common_math.re(1) == 1)
+        self.assertTrue(common_math.re(e_ref) == e_ref)
+        self.assertTrue(common_math.re(2j**2) == -4)
+        self.assertTrue(common_math.re(3+4j) == 3)
+
 class TestSpaceClass(unittest.TestCase):
     """
     Test that the space class can pass basic sanity tests.
@@ -239,9 +247,27 @@ class TestSpaceClass(unittest.TestCase):
         and that its attributes are as expected.
         """
         
-        for k in (0, -1, 1, 1.75, 0.325, 1/7, -1.75, -0.325, -1/7):
-            s = space(k)
+        for k in (0, -1, 1):
+            s = space(curvature=k)
+            self.assertTrue(isclose(
+                s.curvature,
+                k
+                ))
+        
+        for k in (1.75, 0.325, 1/7, -1.75, -0.325, -1/7):
+            s = space(curvature=k)
             self.assertTrue(s.curvature == k)
+
+        for fk in (0, -1, 1, 1.75, 0.325, 1/7, -1.75, -0.325, -1/7):
+            s = space(fake_curvature=fk)
+            self.assertTrue(isclose(
+                s.curvature,
+                fk * abs(fk)
+                ))
+
+        for r in (1, 2, 1j, 2j, float('inf')):
+            s = space(radius=r)
+            self.assertTrue(s.curvature == 1/r**2)
             
     def test_equality(self):
         """
@@ -249,10 +275,10 @@ class TestSpaceClass(unittest.TestCase):
         and that distinct instances do not appear equal.
         """
 
-        s3 = space(1/5)
+        s3 = space(curvature=1/5)
         for k in (0, -1, 1, 1.75, 0.325, 1/7, -1.75, -0.325, -1/7):
-            s1 = space(k)
-            s2 = space(k)
+            s1 = space(fake_curvature=k)
+            s2 = space(fake_curvature=k)
             self.assertTrue(s1 == s2)
             self.assertTrue(hash(s1) == hash(s2))
             self.assertTrue(str(s1) == str(s2))
@@ -265,7 +291,7 @@ class TestSpaceClass(unittest.TestCase):
         """
         
         for k in (0, -1, 1, 1.75, 0.325, 1/7, -1.75, -0.325, -1/7):
-            s = space(k)
+            s = space(fake_curvature=k)
             r = repr(s)
             v = eval(r)
             self.assertTrue(s == v)
@@ -285,7 +311,7 @@ class TestSpacePoint(unittest.TestCase):
 
         # K = 0
 
-        s = space(0)
+        s = space(curvature=0)
         p = s.make_origin(0)
         self.assertTrue(all(itertools.starmap(isclose, zip(
             p.x,
@@ -307,7 +333,7 @@ class TestSpacePoint(unittest.TestCase):
         sn1_ref = 0.841470984807896506652502321630345
         cn1_ref = 0.540302305868139717400936607442955
 
-        s = space(1)
+        s = space(curvature=1)
         p = s.make_origin(0)
         self.assertTrue(all(itertools.starmap(isclose, zip(
             p.x,
@@ -329,7 +355,7 @@ class TestSpacePoint(unittest.TestCase):
         sh1_ref = 1.17520119364380145688238185059568
         ch1_ref = 1.54308063481524377847790562075713
 
-        s = space(-1)
+        s = space(curvature=-1)
         p = s.make_origin(0)
         self.assertTrue(all(itertools.starmap(isclose, zip(
             p.x,
@@ -356,7 +382,7 @@ class TestSpacePoint(unittest.TestCase):
         direction = (3/13, 4/13, 12/13)
         magnitude = 7.33337377737737773737
         for k in (0, -1, 1, 1.75, 0.325, 1/7, -1.75, -0.325, -1/7):
-            s = space(k)
+            s = space(fake_curvature=k)
             p = s.make_point(direction, magnitude)
             r = repr(p)
             v = eval(r)
@@ -374,7 +400,7 @@ class TestSpacePoint(unittest.TestCase):
         magnitude = 7.33337377737737773737
         for k in (0, -1, 1, 1.75, 0.325, 1/7, -1.75, -0.325, -1/7):
             k2 = k * abs(k)
-            s = space(k)
+            s = space(fake_curvature=k)
             p = s.make_point(direction, magnitude)
             self.assertTrue(isclose(
                 p[0]**2,
@@ -395,7 +421,7 @@ class TestSpacePoint(unittest.TestCase):
         u2 = (0, 1/2, 0, 1/2, 1/2, 0, 0, 0, 1/2)
         u3 = (12/13, 4/13, 3/13)
         for k in (0, -1, 1):
-            s = space(k)
+            s = space(fake_curvature=k)
             for d in (0, 1, 1/3, 3/2):
                 for n in (u1, u2, u3):
                     p = s.make_point(n, d)
@@ -413,7 +439,7 @@ class TestSpacePoint(unittest.TestCase):
         v2 = tuple(range(30))
         v3 = (-11, 1, 0, -1, 11, 1/11)
         for k in (0, -1, 1):
-            s = space(k)
+            s = space(fake_curvature=k)
             for d in (0, 1, 1/3, 3/2):
                 for n in (v1, v2, v3):
                     p = s.make_point(n, d, normalize=True)
@@ -430,7 +456,7 @@ class TestSpacePoint(unittest.TestCase):
         pi_ref = 3.14159265358979323846264338327933
         for r in (1, 2, 3, 1/3):
             k = 1/r
-            s = space(k)
+            s = space(fake_curvature=k)
             for j, d in ((2, pi_ref - 2), (pi_ref, 0)):
                 j *= r
                 d *= r
@@ -468,7 +494,7 @@ class TestSpheres(unittest.TestCase):
         Should always be exactly 0.
         """
         for k in (0, -1, 1, 1.75, 0.325, 1/7, -1.75, -0.325, -1/7):
-            s = space(k) 
+            s = space(fake_curvature=k) 
             for name in ('sphere_s1', 'sphere_v2', 'sphere_s2', 'sphere_v3'):
                 self.assertTrue(getattr(s, name)(0) == 0)
 
@@ -482,7 +508,7 @@ class TestSpheres(unittest.TestCase):
         s2_ref = 12.5663706143591729538505735331173
         v3_ref = 4.18879020478639098461685784437218
 
-        s = space(0)
+        s = space(curvature=0)
 
         self.assertTrue(isclose(
             s.sphere_s1(1),
@@ -526,7 +552,7 @@ class TestSpheres(unittest.TestCase):
         the exponent in that monomial.
         """
 
-        s = space(0)
+        s = space(curvature=0)
 
         magic = 77773.333773777773733
         for mul in (2, 5, 1/3, 1/11, magic, 1/magic):
@@ -547,7 +573,7 @@ class TestSpheres(unittest.TestCase):
         with K = -1.
         """
 
-        s = space(-1)
+        s = space(curvature=-1)
         for r, s1, v2, s2, v3 in (
             (
                 1.0,
@@ -609,7 +635,7 @@ class TestSpheres(unittest.TestCase):
         with K = 1.
         """
 
-        s = space(1)
+        s = space(curvature=1)
         for r, s1, v2, s2, v3 in (
             (
                 1.0,
@@ -684,8 +710,8 @@ class TestSpheres(unittest.TestCase):
                     ('sphere_s2', 2),
                     ('sphere_v3', 3)
                     ):
-                    s1 = space(kdir)
-                    s2 = space(kdir / mul)
+                    s1 = space(fake_curvature=kdir)
+                    s2 = space(fake_curvature=kdir / mul)
                     self.assertTrue(isclose(
                         getattr(s1, name)(1) * mul**dim,
                         getattr(s2, name)(mul)
@@ -702,7 +728,7 @@ class TestSpheres(unittest.TestCase):
         import itertools
 
         for k in (0, -1, 1, 1.75, 0.325, 1/7, -1.75, -0.325, -1/7):
-            s = space(k) 
+            s = space(fake_curvature=k) 
             for m in itertools.chain(
                 range(30),
                 range(31,3000,100),
@@ -747,4 +773,4 @@ class TestMPMath(unittest.TestCase):
 # run unittest's main
 if __name__ == '__main__':
     unittest.main()
-
+    

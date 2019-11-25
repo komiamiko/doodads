@@ -12,3 +12,7 @@ As wonky as these spaces may sound, they do share some familiar concepts and use
 Relevant files:
 
 - `hype.py` contains an abstract space class with geometry formulas and implementations for all the K you could want
+
+Komi's note:
+
+*This is some top tier math cheese going on here. In the process of developing hype.py I developed a lot of math formulas. I never had to examine the properties of the manifolds or use the projected models of the spaces, as serious mathematicians did. I just made unit tests. I started with some existing known to be correct mathematical formulas and expectations for how geometry within the spaces should behave, made tests to encompass everything I missed, and then made guesses about the formulas until something worked. Not only that though, but after the 2D curvature kept showing up, I concluded that curvature is 2D quantity describing the space, even in higher dimensions. This seems to correspond to the Gaussian curvature, but I didn't previously find a good explanation for it. It sounded counterintuitive since, well, why should an N-dimensional space be described by a 2-dimensional quantity? But that's how it all works out. Anyway, this has been an enlightening journey. Enjoy the math library.*
