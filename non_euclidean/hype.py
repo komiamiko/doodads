@@ -651,6 +651,16 @@ class abc_space(object):
             map((lambda tup:(tup[0] - tup[1])**2), zip(p[1:], q[1:])),
             real(0))
         return real(2) * self.asin(math.sqrt(x) / real(2))
+    def metric(self, p, q):
+        """
+        Computes the metric tensor value for 2 points in this space.
+        Generalizes the concept of a dot product to non-Euclidean spaces.
+        Is taken about the origin. If you want to take the metric tensor
+        about a different point, first parallel transport the vectors so that
+        the point becomes the origin.
+        """
+        # TODO find formula for and implement the metric tensor
+        raise NotImplementedError
 
 class _projection_types(enum.Enum):
     drop_extra_axis = 1
