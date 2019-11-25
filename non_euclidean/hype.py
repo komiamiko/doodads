@@ -13,6 +13,7 @@ import math
 import functools
 import operator
 import enum
+import collections.abc
 
 def _require_hash(value):
     """
@@ -400,12 +401,32 @@ class abc_space(object):
         math = self.math
         real = math.real
         r = to_real(real, r)
-        return math.tau / to_real(real, self.curvature) * (r - self.sin(r * real(2)) / real(2))
+        curvature_k = to_real(real, self.curvature)
+        curvature_k = curvature_k * abs(curvature_k)
+        return math.tau / curvature_k * (r - self.sin(r * real(2)) / real(2))
     def inv_sphere_v3(self, m):
         """
         Inverts sphere_v3
-        Note: this is difficult in general, because it can't be
-        expressed in terms of common functions
+
+        IMPORTANT WARNING
+        This function, in general, cannot be expressed in terms of common functions.
+        We fallback to using a root finding method provided by scipy.
+        scipy is an external library you would need to install.
+        This root finder may not work in other math contexts.
+        """
+        from scipy.optimize import root_scalar
+        math = self.math
+        real = math.real
+        m = to_real(real, m)
+        lower, est, upper = self._estimate_inv_sphere_v3(m)
+        def objective(r):
+            return self.sphere_v3(r) - m
+        result = root_scalar(objective, bracket = (lower, upper), x0 = est)
+        return result.root
+    def _estimate_inv_sphere_v3(self, m):
+        """
+        Used by root finding methods in inv_sphere_v3
+        Returns (lower bound, estimate, upper bound)
         """
         raise NotImplementedError
     def circle_circumference(self, r):
@@ -676,7 +697,7 @@ projection_types.join({
     'beltrami_klein': projection_types.preserve_lines
     })
 
-class space_point(object):
+class space_point(collections.abc.Sequence):
     """
     Represents a point in a space of constant curvature.
     By convention, an extra dimension is added to make math easier (see: projected coordinates),
@@ -722,6 +743,8 @@ class space_point(object):
         return self.x[index]
     def __setitem__(self, index, value):
         self.x[index] = value
+    def __len__(self):
+        return len(self.x)
     def __abs__(self):
         return self.home.magnitude_of(self)
     def __add__(self, other):
@@ -1084,6 +1107,24 @@ class elliptic_space(abc_space):
         """
         dist = abc_space.distance_between(self, p, q)
         return min(dist, self.math.pi * self.scale - dist)
+    def _estimate_inv_sphere_v3(self, m):
+        math = self.math
+        real = math.real
+        m /= self.scale**3
+        if m > real(6):
+            est = m / math.tau
+            gap = math.tau / real(12)
+            lower = max(est - gap, real(0))
+            upper = est + gap
+        else:
+            est = math.cbrt(m * real(3) / (math.tau * real(2)))
+            gap = math.tau / real(12)
+            lower = est
+            upper = est + gap
+        lower *= self.scale
+        est *= self.scale
+        upper *= self.scale
+        return lower, est, upper
 
 class hyperbolic_space(abc_space):
     """
@@ -1133,6 +1174,24 @@ class hyperbolic_space(abc_space):
         real = math.real
         x = to_real(real, x)
         return math.asinh(x)
+    def _estimate_inv_sphere_v3(self, m):
+        math = self.math
+        real = math.real
+        m /= self.scale**3
+        if m > real(10):
+            est = math.asinh(m / math.pi) / real(2)
+            gap = real(1) / real(2)
+            lower = max(est - gap, real(0))
+            upper = est + gap
+        else:
+            est = math.cbrt(m * real(3) / (math.tau * real(2)))
+            gap = real(1) / real(8)
+            lower = max(est - gap, real(0))
+            upper = est
+        lower *= self.scale
+        est *= self.scale
+        upper *= self.scale
+        return lower, est, upper
 
 class space(abc_space):
     """
@@ -1249,19 +1308,21 @@ class space(abc_space):
     def sphere_s1(self, r):
         return self.base.sphere_s1(self, r)
     def inv_sphere_s1(self, m):
-        return self.base.inv_sphere_s1(self, r)
+        return self.base.inv_sphere_s1(self, m)
     def sphere_v2(self, r):
         return self.base.sphere_v2(self, r)
     def inv_sphere_v2(self, m):
-        return self.base.inv_sphere_v2(self, r)
+        return self.base.inv_sphere_v2(self, m)
     def sphere_s2(self, r):
         return self.base.sphere_s2(self, r)
     def inv_sphere_s2(self, m):
-        return self.base.inv_sphere_s1(self, r)
+        return self.base.inv_sphere_s2(self, m)
     def sphere_v3(self, r):
         return self.base.sphere_v3(self, r)
     def inv_sphere_v3(self, m):
-        return self.base.inv_sphere_v3(self, r)
+        return self.base.inv_sphere_v3(self, m)
+    def _estimate_inv_sphere_v3(self, m):
+        return self.base._estimate_inv_sphere_v3(self, m)
     def cosine_law_side(self, a, b, C):
         return self.base.cosine_law_side(self, a, b, C)
     def cosine_law_angle(self, a, b, c):

@@ -462,15 +462,236 @@ class TestSpheres(unittest.TestCase):
     Are the surface and volume calculations, and their inverses, correct?
     This collection of tests is for just that.
     """
-    def test_vs_small(self):
+    def test_volume_surface_empty(self):
         """
-        Test for 2-spheres and 3-spheres the
-        forward and backwards formulas
-        EXCEPT non-Euclidean inverse 3-sphere volume.
-        Tests against known vectors, and tests scaling under different curvature.
+        Test empty spheres, calculating forward direction.
+        Should always be exactly 0.
         """
-        pass # TODO
-    def test_root_find(self):
+        for k in (0, -1, 1, 1.75, 0.325, 1/7, -1.75, -0.325, -1/7):
+            s = space(k) 
+            for name in ('sphere_s1', 'sphere_v2', 'sphere_s2', 'sphere_v3'):
+                self.assertTrue(getattr(s, name)(0) == 0)
+
+    def test_euclidean_unit_spheres(self):
+        """
+        Test Euclidean unit spheres, which are well known.
+        """
+        
+        s1_ref = 6.28318530717958647692528676655867
+        v2_ref = 3.14159265358979323846264338327933
+        s2_ref = 12.5663706143591729538505735331173
+        v3_ref = 4.18879020478639098461685784437218
+
+        s = space(0)
+
+        self.assertTrue(isclose(
+            s.sphere_s1(1),
+            s1_ref
+            ))
+        self.assertTrue(isclose(
+            s.inv_sphere_s1(s1_ref),
+            1
+            ))
+        self.assertTrue(isclose(
+            s.sphere_v2(1),
+            v2_ref
+            ))
+        self.assertTrue(isclose(
+            s.inv_sphere_v2(v2_ref),
+            1
+            ))
+        self.assertTrue(isclose(
+            s.sphere_s2(1),
+            s2_ref
+            ))
+        self.assertTrue(isclose(
+            s.inv_sphere_s2(s2_ref),
+            1
+            ))
+        self.assertTrue(isclose(
+            s.sphere_v3(1),
+            v3_ref
+            ))
+        self.assertTrue(isclose(
+            s.inv_sphere_v3(v3_ref),
+            1
+            ))
+
+    def test_euclidean_scale(self):
+        """
+        In Euclidean space, all of the sphere formulas look like a
+        monomial in the radius r.
+        Thus when we scale the r, we should expect the mass
+        to be scaled by r^n, where n is the dimensionality and also
+        the exponent in that monomial.
+        """
+
+        s = space(0)
+
+        magic = 77773.333773777773733
+        for mul in (2, 5, 1/3, 1/11, magic, 1/magic):
+            for name, dim in (
+                ('sphere_s1', 1),
+                ('sphere_v2', 2),
+                ('sphere_s2', 2),
+                ('sphere_v3', 3)
+                ):
+                self.assertTrue(isclose(
+                    getattr(s, name)(1) * mul**dim,
+                    getattr(s, name)(mul)
+                    ))
+
+    def test_hyperbolic_known(self):
+        """
+        Tests known spheres living in the standard hyperbolic space
+        with K = -1.
+        """
+
+        s = space(-1)
+        for r, s1, v2, s2, v3 in (
+            (
+                1.0,
+                7.38400687288264534755345768623,
+                3.4122762652849023064483572863,
+                17.3553873817714370876641814907,
+                5.11093270570828897693032500084
+                ),
+            (
+                0.1,
+                0.629366251992614535228504721399,
+                0.0314421152028826101500700526615,
+                0.126083144068540764307450085436,
+                0.004197175768278167372264250951
+                ),
+            (
+                10.0,
+                69198.1829828835609424193699446,
+                69191.9000828325529865724770751,
+                1524191407.39366831262439379345,
+                762095644.00657373163082028776
+                )
+            ):
+            self.assertTrue(isclose(
+                s.sphere_s1(r),
+                s1
+                ))
+            self.assertTrue(isclose(
+                s.inv_sphere_s1(s1),
+                r
+                ))
+            self.assertTrue(isclose(
+                s.sphere_v2(r),
+                v2
+                ))
+            self.assertTrue(isclose(
+                s.inv_sphere_v2(v2),
+                r
+                ))
+            self.assertTrue(isclose(
+                s.sphere_s2(r),
+                s2
+                ))
+            self.assertTrue(isclose(
+                s.inv_sphere_s2(s2),
+                r
+                ))
+            self.assertTrue(isclose(
+                s.sphere_v3(r),
+                v3
+                ))
+            # inv_sphere_v3
+            # is not tested
+            # this is intentional
+
+    def test_elliptic_known(self):
+        """
+        Tests known spheres living in the standard elliptic space
+        with K = 1.
+        """
+
+        s = space(1)
+        for r, s1, v2, s2, v3 in (
+            (
+                1.0,
+                5.28711812816291235777213197934,
+                2.88836579751364013754312174055,
+                8.89791299620185648000441978084,
+                3.42654319113592227685929952373
+                ),
+            (
+                0.1,
+                0.627271856640888586303151271167,
+                0.0313897553222061208579665325089,
+                0.125245385229718577742290413525,
+                0.00418042059859385652716262757844
+                ),
+            (
+                1.55,
+                6.28182665751126808523746937213,
+                6.15252755066186628750014389238,
+                12.5609366032633242045384074345,
+                9.60830772249653625946806331352
+                )
+            ):
+            self.assertTrue(isclose(
+                s.sphere_s1(r),
+                s1
+                ))
+            self.assertTrue(isclose(
+                s.inv_sphere_s1(s1),
+                r
+                ))
+            self.assertTrue(isclose(
+                s.sphere_v2(r),
+                v2
+                ))
+            self.assertTrue(isclose(
+                s.inv_sphere_v2(v2),
+                r
+                ))
+            self.assertTrue(isclose(
+                s.sphere_s2(r),
+                s2
+                ))
+            self.assertTrue(isclose(
+                s.inv_sphere_s2(s2),
+                r
+                ))
+            self.assertTrue(isclose(
+                s.sphere_v3(r),
+                v3
+                ))
+            # inv_sphere_v3
+            # is not tested
+            # this is intentional
+
+    def test_non_euclidean_scale_curvature(self):
+        """
+        In non-Euclidean spaces,
+        all of the sphere formulas are a monomial in the curvature
+        (not the radius, it's the curvature)
+        also corresponding to the dimension.
+        So of course we should expect that we can scale the curvature
+        and the mass scales by the right power.
+        """
+
+        magic = 77773.333773777773733
+        for kdir in (1, -1):
+            for mul in (2, 5, 1/3, 1/11, magic, 1/magic):
+                for name, dim in (
+                    ('sphere_s1', 1),
+                    ('sphere_v2', 2),
+                    ('sphere_s2', 2),
+                    ('sphere_v3', 3)
+                    ):
+                    s1 = space(kdir)
+                    s2 = space(kdir / mul)
+                    self.assertTrue(isclose(
+                        getattr(s1, name)(1) * mul**dim,
+                        getattr(s2, name)(mul)
+                        ))
+        
+    def test_inv_sphere_v3_root_find(self):
         """
         Tests specifically the non-Euclidean inverse 3-sphere volume.
         There is no exact solution in terms of common math functions,
@@ -478,7 +699,22 @@ class TestSpheres(unittest.TestCase):
         This test measures the accuracy of the root finder when
         applied to this problem.
         """
-        pass # TODO
+        import itertools
+
+        for k in (0, -1, 1, 1.75, 0.325, 1/7, -1.75, -0.325, -1/7):
+            s = space(k) 
+            for m in itertools.chain(
+                range(30),
+                range(31,3000,100),
+                map((1).__truediv__, range(3, 30, 2)),
+                ):
+                r = s.inv_sphere_v3(m)
+                self.assertTrue(r >= 0)
+                v = s.sphere_v3(r)
+                self.assertTrue(isclose(
+                    m,
+                    v
+                    ))
 
 class TestPointOperations(unittest.TestCase):
     """
