@@ -486,6 +486,8 @@ class TestPointOperations(unittest.TestCase):
     """
     def test_parallel_transport(self):
         pass # TODO
+    def test_rotation_isometry(self):
+        pass # TODO
     def test_polygon_walk(self):
         pass # TODO
     def test_metric(self):

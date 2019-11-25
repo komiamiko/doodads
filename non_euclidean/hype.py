@@ -283,12 +283,8 @@ class abc_space(object):
         For K = 0, this is just vector addition, and the order does not matter.
         For other K, however, this operation is in general not commutative.
         """
-        # TODO implement parallel transport!
-        # I know a cheesy way to do it for dimension N <= 2
-        # but I want to have it implemented more generally
-        # and I heard it's harder for N >= 3
-        # that won't stop me from finding out how!
-        raise NotImplementedError
+        
+        return space_point_transform(dest)(ref)
     def hypot(self, x, y):
         """
         If x and y are lengths of the legs of a right triangle,
@@ -778,6 +774,36 @@ class space_point(object):
             ex = self.x[0] + self.home.math.real(1)
             return tuple(map((lambda x: x / ex), self.x[1:]))
         raise ValueError('Projection type unknown')
+
+class space_point_transform(object):
+    """
+    Represents a transformation function on space points,
+    more specifically, a kind of isometry.
+    """
+    def __init__(self, data):
+        """
+        The usual constructor.
+        Feed it a point as data to have it construct the transform
+        as parallel transpart from the origin to that point.
+        """
+        # TODO implement parallel transport!
+        # I know a cheesy way to do it for dimension N <= 2
+        # but I want to have it implemented more generally
+        # and I heard it's harder for N >= 3
+        # that won't stop me from finding out how!
+        raise NotImplementedError
+    def __call__(self, data):
+        """
+        Either concatenate this transformation object
+        or apply it to a point.
+        """
+        raise NotImplementedError
+    def __add__(self, other):
+        """
+        For convenience, you are also allowed to write
+        concatenation/application as an addition.
+        """
+        return self(other)
 
 class euclidean_space(abc_space):
     """
