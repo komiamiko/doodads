@@ -210,6 +210,12 @@ class abc_space(object):
         Satisfies:
         cos(0) = 1
         d/dx cos(x) = -K sin(x)
+
+        Examples:
+        K =  0 --> cos(x) = 1
+        K =  1 --> cos(x) = cos*(x)
+        K = -1 --> cos(x) = cosh(x)
+        *regular trig function, not our special one
         """
         raise NotImplementedError
     def sin(self, x):
@@ -219,6 +225,12 @@ class abc_space(object):
         Satisfies:
         sin(0) = 0
         d/dx sin(x) = cos(x)
+
+        Examples:
+        K =  0 --> sin(x) = x
+        K =  1 --> sin(x) = sin*(x)
+        K = -1 --> sin(x) = sinh(x)
+        *regular trig function, not our special one
         """
         raise NotImplementedError
     def acos(self, x):
@@ -252,6 +264,10 @@ class abc_space(object):
         Call with normalize if you are not sure
         if the direction vector is a unit vector.
         """
+        # dumb edge case: 0-dimensional space
+        if len(direction) == 0:
+            return self.make_origin(0)
+        
         math = self.math
         real = math.real
         preal = functools.partial(to_real, real)
@@ -286,9 +302,10 @@ class abc_space(object):
         Does not check for whether that point object actually belongs to this space.
         """
         math = self.math
+        real = math.real
         if use_quick:
             return self.acos(point[0])
-        return self.asin(abs(functools.reduce(math.hypot, point[1:])))
+        return self.asin(abs(functools.reduce(math.hypot, point[1:], real(0))))
     def parallel_transport(self, dest, ref):
         """
         What point do we get when parallel transporting
@@ -334,8 +351,14 @@ class abc_space(object):
         return self.acos(self.cos(z) / self.cos(x))
     def sphere_s1(self, r):
         """
-        Mass of the 1D boundary of the 2-sphere.
+        Mass (measure) of the 1D boundary of the 2-sphere.
         Commonly called the circumference of a circle.
+
+        Equation is:
+        m = tau sin(r)
+        m is the mass (measure)
+        tau = 2pi is the number of radians in a full turn
+        sin is this space's sin function
 
         To be pedantic, mathematicians call the inside a "ball"
         and the boundary a "sphere" but most people don't care
@@ -356,8 +379,14 @@ class abc_space(object):
         return self.asin(m / math.tau)
     def sphere_v2(self, r):
         """
-        Mass of the 2D interior of the 2-sphere.
+        Mass (measure) of the 2D interior of the 2-sphere.
         Commonly called the area of a circle.
+
+        Equation is:
+        m = 2tau sin(r/2)^2
+        m is the mass (measure)
+        tau = 2pi is the number of radians in a full turn
+        sin is this space's sin function
 
         To be pedantic, mathematicians call the inside a "ball"
         and the boundary a "sphere" but most people don't care
@@ -378,8 +407,14 @@ class abc_space(object):
         return self.asin(math.sqrt(m / (math.tau * real(2)))) * real(2)
     def sphere_s2(self, r):
         """
-        Mass of the 2D boundary of the 3-sphere.
+        Mass (measure) of the 2D boundary of the 3-sphere.
         Commonly called the surface area of a sphere.
+
+        Equation is:
+        m = 2tau sin(r)^2
+        m is the mass (measure)
+        tau = 2pi is the number of radians in a full turn
+        sin is this space's sin function
 
         To be pedantic, mathematicians call the inside a "ball"
         and the boundary a "sphere" but most people don't care
@@ -400,8 +435,15 @@ class abc_space(object):
         return self.asin(math.sqrt(m / (math.tau * real(2))))
     def sphere_v3(self, r):
         """
-        Mass of the 3D interior of the 3-sphere.
+        Mass (measure) of the 3D interior of the 3-sphere.
         Commonly called the volume of a sphere
+
+        Equation is:
+        m = tau/K * (r - sin(2r)/2)
+        m is the mass (measure)
+        tau = 2pi is the number of radians in a full turn
+        K is the curvature of the space
+        sin is this space's sin function
 
         To be pedantic, mathematicians call the inside a "ball"
         and the boundary a "sphere" but most people don't care
@@ -672,6 +714,7 @@ class abc_space(object):
         the point becomes the origin.
         """
         # TODO find formula for and implement the metric tensor
+        # also remember to put the formula in the doc comment because we're nice
         raise NotImplementedError
 
 class _projection_types(enum.Enum):
@@ -753,6 +796,20 @@ class space_point(collections.abc.Sequence):
             )
     def __sub__(self, other):
         return self.home.distance_between(self, other)
+    def __mul__(self, fac):
+        """
+        Scale the point as a vector, by a scalar factor.
+        """
+        home = self.home
+        math = home.math
+        real = math.real
+
+        magnitude = abs(self)
+        if magnitude == 0:
+            return self
+
+        direction = self[1:]
+        return home.make_point(direction, magnitude, normalize=True)
     def project(self, projection_type):
         """
         Project this point to the regular boring Euclidean plane
@@ -764,9 +821,10 @@ class space_point(collections.abc.Sequence):
         Corresponds to
         the elliptic orthographic projection and
         the hyperbolic Gans projection.
+        Also the same as projecting from the point (-inf, 0, 0, 0, ...) to the plane x0 = 1
 
         projection_type = projection_types.preserve_angles
-        Projects from the point (-1, 0, 0, 0, ...)
+        Projects from the point (-1, 0, 0, 0, ...) to the plane x0 = 1
         Angles are preserved - a corner with a certain angle will be mapped
         to a corner with the same angle, etc.
         Corresponds to
@@ -774,7 +832,7 @@ class space_point(collections.abc.Sequence):
         the hyperbolic Poincaré projection.
 
         projection_type = projection_types.preserve_lines
-        Projects from the origin.
+        Projects from the origin to the plane x0 = 1
         Straightness is preserved - a line (geodesic) will be mapped to a line,
         a polygon to a polygon, etc.
         Corresponds to
@@ -798,28 +856,198 @@ class space_point_transform(object):
     Represents a transformation function on space points,
     more specifically, a kind of isometry.
     """
-    def __init__(self, data):
+    def __init__(self, data, curvature=None):
         """
         The usual constructor.
         Feed it a point as data to have it construct the transform
         as parallel transpart from the origin to that point.
         """
-        # TODO implement parallel transport!
-        # I know a cheesy way to do it for dimension N <= 2
-        # but I want to have it implemented more generally
-        # and I heard it's harder for N >= 3
-        # that won't stop me from finding out how!
-        raise NotImplementedError
+        if isinstance(data, space_point):
+            # create transformation data
+            s = data.home
+            self.curvature = s.curvature
+            if self.curvature == 0:
+                self.add = data[1:]
+                self.matrix = None
+            else:
+                self.add = None
+                self.matrix = space_point_transform._as_matrix(data)
+        elif isinstance(data, space_point_transform):
+            # shallow copy
+            self.curvature = data.curvature
+            self.add = data.add
+            self.matrix = data.matrix
+        elif isinstance(data, (tuple, list)):
+            # should be an addition vector
+            self.add = data
+            self.matrix = None
+            # we take your curvature
+            self.curvature = curvature
+        elif hasattr(data, shape):
+            # probably a numpy array or matrix
+            if len(data.shape) == 1:
+                # seems like a vector to be added
+                self.add = data
+                self.matrix = None
+            elif len(data.shape) == 2:
+                # seems like a left transform matrix
+                self.add = None
+                self.matrix = data
+            else:
+                raise ValueError('Array-like should be 1D (added vector) or 2D (left transform matrix), but received different shape')
+            # we take your curvature
+            self.curvature = curvature
+        else:
+            raise TypeError('Not sure how to construct a transform from that data type')
+    def __eq__(self, other):
+        if self is other:return True
+        if not isinstance(other, space_point_transform):return False
+        return self.curvature == other.curvature and self.add == other.add and self.matrix == other.matrix
+    def __ne__(self, other):
+        return not self == other
+    def __hash__(self):
+        return hash((space_point_transform, self.curvature, self.add, _require_hash(self.matrix)))
+    def __repr__(self):
+        if self.add is not None:
+            data = repr(self.add)
+        elif self.matrix is not None:
+            data = repr(self.matrix)
+        return 'space_point_transform(' + data + ', curvature=' + repr(self.curvature) + ')'
+    def __str__(self):
+        if self.add is not None:
+            return '(P -> ' + str(self.add) + ' + P)'
+        elif self.matrix is not None:
+            return str(self.matrix)
+    @staticmethod
+    def _as_matrix(point):
+        """
+        Helper method to construct a transformation matrix from a point.
+        Please don\'t use this for K = 0 because that would be dumb.
+
+        Requires numpy
+        numpy is an external library, you may need to install it.
+        The matrix class used is numpy.array
+
+        Equations used:
+        D = (x0 - 1)/(x1^2 + x2^2 + ... + xk^2)
+        it's just an intermediate constant, it doesn't really mean anything
+        T[0,0] = x0
+        T[0,i] = -K xi        |  i =/= 0
+        T[i,0] = xi          |  i =/= 0
+        T[i,i] = 1 + xi^2 D  |
+        T[i,j] = xi xj D     |  i =/= j,  i,j =/= 0
+        These rules fully describe a direct way to compute every element of the matrix.
+
+        The current implementation is not vectorized,
+        so it might seem a little slow for very high dimensions.
+        A possible future improvement would be to find a way to vectorize this matrix,
+        taking advantage of numpy's very good constant factor.
+        """
+        import numpy
+
+        # fetch point info
+        s = point.home
+        math = s.math
+        real = math.real
+        n = len(point)
+        curvature = s.curvature
+
+        # initialize matrix to all zeros of the correct type
+        t = numpy.array([[real(0)]*n]*n)
+
+        # extra constant b = x1^2 + x2^2 + ...
+        b = sum(map((lambda x:x*x), point[1:]))
+
+        # b = 0 means the point is the origin
+        # so let's build the identity matrix
+        if b == 0:
+            a = numpy.arange(n)
+            t[a,a] = real(1)
+            return t
+        
+        # extra constant c = -K
+        c = -curvature
+        # apply the rules for d
+        d = (point[0] - 1)/b
+        # apply the rules for t
+        t[0,0] = point[0]
+        for i in range(1, n):
+            xi = point[i]
+            t[0,i] = xi * c
+            t[i,0] = xi
+            xid = xi * d
+            t[i,i] = 1 + xid * xi
+            for j in range(i+1, n):
+                xj = point[j]
+                t[i,j] = t[j,i] = xid * xj
+
+        # it's done!
+        return t
+    @staticmethod
+    def _flatten_matrix(mat, cast):
+        """
+        Helper method to flatten the matrix type
+        into a tuple with a certain type.
+        """
+        import numpy
+        return tuple(map(cast, mat.flatten()))
     def __call__(self, data):
         """
         Either concatenate this transformation object
         or apply it to a point.
+
+        When concatenating transforms,
+        since we use the left transform convention,
+        (f g) x = f (g x)
+        so the new transform will apply the other one first
+        and then this one.
         """
-        raise NotImplementedError
+        if isinstance(data, space_point):
+            if self.curvature != data.home.curvature:
+                raise ValueError('Curvatures do not match')
+            if self.add is not None:
+                if len(self.add) != len(data) - 1:
+                    raise ValueError('Dimensionality does not match')
+                return space_point(
+                    data.home,
+                    (data[0],) + tuple(map(sum, zip(self.add, data[1:])))
+                    )
+            if self.matrix is not None:
+                if self.matrix.shape[0] != len(data):
+                    raise ValueError('Dimensionality does not match')
+                return space_point(
+                    data.home,
+                    space_point_transform._flatten_matrix(self.matrix @ data, data.home.math.real)
+                    )
+        elif isinstance(data, space_point_transform):
+            if self.curvature != data.curvature:
+                raise ValueError('Curvatures do not match')
+            if self.add is not None:
+                if len(self.add) != len(data.add):
+                    raise ValueError('Dimensionality does not match')
+                return space_point_transform(
+                    tuple(map(sum, zip(self.add, data.add))),
+                    curvature = self.curvature
+                    )
+            if self.matrix is not None:
+                if self.matrix.shape != data.add.shape:
+                    raise ValueError('Dimensionality does not match')
+                return space_point_transform(
+                    self.matrix @ data.matrix,
+                    curvature = self.curvature
+                    )
+        else:
+            raise TypeError('Can only apply this transform to a point (moves the point) or a transform (concatenates the transforms), but received some other type')
     def __add__(self, other):
         """
         For convenience, you are also allowed to write
         concatenation/application as an addition.
+
+        When concatenating transforms,
+        since we use the left transform convention,
+        (f g) x = f (g x)
+        so the new transform will apply the other one first
+        and then this one.
         """
         return self(other)
 

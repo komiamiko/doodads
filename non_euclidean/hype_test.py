@@ -21,6 +21,15 @@ from fractions import Fraction
 # the thing we want to test
 from hype import space, space_point, common_math, to_real
 
+def point_isclose(a, b, *args, **kwargs):
+    """
+    Analogue of math.isclose for space points.
+    """
+    for x, y in zip(a, b):
+        if not isclose(x, y, *args, **kwargs):
+            return False
+    return True
+
 class TestExtendedMath(unittest.TestCase):
     """
     Collection of tests for the math namespace.
@@ -746,8 +755,96 @@ class TestPointOperations(unittest.TestCase):
     """
     Collection of tests focusing on operations on space points.
     """
-    def test_parallel_transport(self):
-        pass # TODO
+    def _test_parallel_transport(self, k=None):
+        """
+        Ensures that parallel transport in a space behaves as expected.
+        Is a fake test. You have to give it a k.
+        """
+        import itertools
+
+        if k is None:raise ValueError('This should not get called')
+
+        s = space(curvature=k)
+
+        # require -P + P = 0
+        # require P + P = 2P
+        # require P + P + P = 3P
+        # for all K
+        for rp in (
+            ((), 1),
+            ((1,), 1),
+            ((1,), 3),
+            ((3/5, 4/5), 1),
+            ((-4/5, 3/5), 2),
+            ((3/7, 0, -6/7, -2/7), 7),
+            ((0, -18/25, 0, 0, 11/25, -12/25, -6/25), 6)
+            ):
+            p = s.make_point(rp[0], rp[1])
+            self.assertTrue(isclose(
+                abs(-p + p),
+                0,
+                abs_tol=p[0]*1e-12
+                ))
+            p2 = s.make_point(rp[0], rp[1] * 2)
+            self.assertTrue(point_isclose(
+                p + p,
+                p2
+                ))
+            p3 = s.make_point(rp[0], rp[1] * 3)
+            self.assertTrue(point_isclose(
+                p + p + p,
+                p3
+                ))
+
+        # require P + Q = Q + P
+        # but only if K = 0
+        for p, q in itertools.permutations(
+            map(
+                (lambda tup:s.make_point(tup, 3)),
+                (
+                    (15/35, -18/35, -10/35, 24/35),
+                    (0, 0, 3/5, 4/5),
+                    (4/21, 8/21, 0, 19/21),
+                    (4/21, 1/21, -18/21, 10/21)
+                    )
+                ),
+            2
+            ):
+            self.assertTrue(point_isclose(p + q, q + p) == (k==0))
+
+    def test_euclidean_parallel_transport(self):
+        """
+        Tests parallel transport's basic properties in Euclidean space.
+        """
+        
+        self._test_parallel_transport(k=0)
+
+    def test_elliptic_parallel_transport(self):
+        """
+        Tests parallel transport's basic properties in elliptic space.
+        """
+        
+        self._test_parallel_transport(k=1)
+
+    def test_hyperbolic_parallel_transport(self):
+        """
+        Tests parallel transport's basic properties in hyperbolic space.
+        """
+        
+        self._test_parallel_transport(k=0)
+
+    def test_scaled_parallel_transport(self):
+        """
+        Tests parallel transport's basic properties in spaces with weird curvature numbers.
+        Very negative K, meaning very curvy hyperbolic space,
+        tends to cause math to break, because its sin and cos
+        (actually sinh and cosh) grow exponentially.
+        Thus we only test down to K = -2 here.
+        """
+        
+        for k in (1/11, -1/11, 11, -2):
+            self._test_parallel_transport(k=k)
+        
     def test_rotation_isometry(self):
         pass # TODO
     def test_polygon_walk(self):
