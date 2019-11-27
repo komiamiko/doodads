@@ -520,7 +520,91 @@ class TestTriangles(unittest.TestCase):
     This collection of tests checks various known triangles and sees
     if the math can correctly solve them.
     """
-    pass # TODO
+    def test_pythagorean_triples(self):
+        """
+        There's no way we could get the Pythagorean theorem wrong, right?
+        """
+
+        s = space(0)
+        for a, b, c in (
+            (3, 4, 5),
+            (8, 15, 17),
+            (33, 56, 65)
+            ):
+            self.assertTrue(isclose(
+                s.hypot(a, b),
+                c
+                ))
+            self.assertTrue(isclose(
+                s.leg(a, c),
+                b
+                ))
+
+    def test_special_triangles_euclidean(self):
+        """
+        There's a few very well known triangles.
+        Let's test our trig against them.
+        """
+        import itertools
+
+        s = space(0)
+
+        # turning constants in radians
+        t1_ref = 6.28318530717958647692528676655867
+        t2_ref = t1_ref / 2
+        t3_ref = t1_ref / 3
+        t4_ref = t1_ref / 4
+        t6_ref = t1_ref / 6
+        t8_ref = t1_ref / 8
+        t12_ref = t1_ref / 12
+        # sqrt constants
+        sqrt2_ref = 1.41421356237309504880168872420977
+        sqrt3_ref = 1.73205080756887729352744634150584
+
+        # test with each known triangle
+        for a, C, b, A, c, B, m in (
+            (1, t6_ref, 1, t6_ref, 1, t6_ref, sqrt3_ref/4), # 1 1 1 (equilateral)
+            (1, t4_ref, 1, t8_ref, sqrt2_ref, t8_ref, 1/2), # 1 1 sqrt2 (right isoceles)
+            (1, t4_ref, sqrt3_ref, t12_ref, 2, t6_ref, sqrt3_ref/2), # 1 sqrt3 2 (right)
+            (1, t3_ref, 1, t12_ref, sqrt3_ref, t12_ref, sqrt3_ref/4) # 1 1 sqrt3 (obtuse isoceles)
+            ):
+            # try scaling them up and down too
+            for scale in (1, 2, 1/3):
+                a *= scale
+                b *= scale
+                c *= scale
+                m *= scale**2
+                # go through all vertex permutations
+                for (a, A), (b, B), (c, C) in itertools.permutations([(a, A), (b, B), (c, C)], 3):
+                    self.assertTrue(isclose(
+                        s.cosine_law_side(a, b, C),
+                        c
+                        ))
+                    self.assertTrue(isclose(
+                        s.cosine_law_angle(a, b, c),
+                        C
+                        ))
+                    self.assertTrue(isclose(
+                        s.dual_cosine_law_angle(A, B, c),
+                        C
+                        ))
+                    # skip dual_cosine_law_side because it is not defined in K = 0
+                    self.assertTrue(isclose(
+                        s.sine_law_side(a, A, B),
+                        b
+                        ))
+                    self.assertTrue(isclose(
+                        s.sine_law_angle(a, A, b),
+                        B,
+                        rel_tol = 1e-5 # have to go easier on it since asin is really sensitive around 1
+                        ) or B > t4_ref and isclose( # SSA triangle solving strangeness
+                            s.sine_law_angle(a, A, b),
+                            t2_ref - B
+                            ))
+                    self.assertTrue(isclose(
+                        s.triangle_area_from_sides(a, b, c),
+                        m
+                        ))
 
 class TestSpheres(unittest.TestCase):
     """
@@ -994,7 +1078,9 @@ class TestPointOperations(unittest.TestCase):
             f2 = f+f
             check_transform_eq(f2+f, f+f2)
             check_transform_eq(f2+f2, f+f2+f)
-        
+
+    def test_transform_multiples(self):
+        pass # TODO
     def test_rotation_isometry(self):
         pass # TODO
     def test_polygon_walk(self):

@@ -653,7 +653,7 @@ class abc_space(object):
         a = to_real(real, a)
         A = to_real(real, A)
         B = to_real(real, B)
-        return self.asin(self.sin(a) / math.sin(a) * math.sin(b))
+        return self.asin(self.sin(a) / math.sin(A) * math.sin(B))
     def sine_law_angle(self, a, A, b):
         """
         A triangle looks like this:
@@ -681,6 +681,55 @@ class abc_space(object):
         A = to_real(real, A)
         b = to_real(real, b)
         return math.asin(math.sin(A) / self.sin(a) * self.sin(b))
+    def triangle_area_from_angles(self, A, B, C):
+        """
+        Computes the area of a triangle, given its angles.
+
+        For K = 0, does not work.
+        For other K, uses the Gauss-Bonnet formula:
+          m = 1/K * (A + B + C - pi)
+          pi = tau/2 is the number of radians in a half turn
+
+        This method can handle triangles with infinite side lengths,
+        as it never needs the side lengths.
+        """
+        if self.curvature == 0:
+            raise TypeError('3 angles do not uniquely define a triangle for K = 0')
+        math = self.math
+        real = math.real
+        A = to_real(real, A)
+        B = to_real(real, B)
+        C = to_real(real, C)
+        # Gauss-Bonnet formula
+        return (A + B + C - math.pi) / self.curvature
+    def triangle_area_from_sides(self, a, b, c):
+        """
+        Computes the area of a triangle, given its side lengths.
+
+        For K = 0, uses Heron's formula:
+          s = (a+b+c)/2
+          m^2 = s(s-a)(s-b)(s-c)
+        For other K, solves the triangle using the cosine law,
+        and calls the other method
+        triangle_area_from_angles
+
+        Note that this method breaks down for infinite triangles.
+        """
+        math = self.math
+        real = math.real
+        a = to_real(real, a)
+        b = to_real(real, b)
+        c = to_real(real, c)
+        if self.curvature == 0:
+            # Heron's formula
+            s = (a+b+c)/2
+            return math.sqrt(s*(s-a)*(s-b)*(s-c))
+        else:
+            # solve the triangle and redirect
+            A = self.cosine_law_angle(b, c, a)
+            B = self.cosine_law_angle(c, a, b)
+            C = self.cosine_law_angle(a, b, c)
+            return self.triangle_area_from_angles(A, B, C)
     def distance_between(self, p, q):
         """
         Computes the distance between 2 points in this space,
@@ -1170,7 +1219,7 @@ class euclidean_space(abc_space):
         a = to_real(real, a)
         b = to_real(real, b)
         C = to_real(real, C)
-        return self.sqrt(a*a + b*b - a*b*real(2)*math.cos(C))
+        return math.sqrt(a*a + b*b - a*b*real(2)*math.cos(C))
     def cosine_law_angle(self, a, b, c):
         """
         A triangle looks like this:
@@ -1529,7 +1578,7 @@ class space(abc_space):
         leg(x, z)
         assuming correct types
         """
-        return self.base._leg(self, x / self.scale, y / self.scale) * self.scale
+        return self.base._leg(self, x / self.scale, z / self.scale) * self.scale
     def magnitude_of(self, point, use_quick=False):
         return self.base.magnitude_of(self, point, use_quick=use_quick)
     def sphere_s1(self, r):
