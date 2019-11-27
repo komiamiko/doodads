@@ -273,7 +273,7 @@ class abc_space(object):
         preal = functools.partial(to_real, real)
         direction = tuple(map(preal, direction))
         if normalize:
-            divide_by = functools.reduce(math.hypot, direction)
+            divide_by = abs(functools.reduce(math.hypot, direction)) or real(1)
             direction = tuple(map((lambda x: x / divide_by), direction))
         magnitude = preal(magnitude)
         cm = self.cos(magnitude)
@@ -804,9 +804,9 @@ class space_point(collections.abc.Sequence):
         math = home.math
         real = math.real
 
-        magnitude = abs(self)
+        magnitude = abs(self) * fac
         if magnitude == 0:
-            return self
+            return home.make_origin(len(self) - 1)
 
         direction = self[1:]
         return home.make_point(direction, magnitude, normalize=True)
@@ -883,7 +883,7 @@ class space_point_transform(object):
             self.matrix = None
             # we take your curvature
             self.curvature = curvature
-        elif hasattr(data, shape):
+        elif hasattr(data, 'shape'):
             # probably a numpy array or matrix
             if len(data.shape) == 1:
                 # seems like a vector to be added
@@ -993,7 +993,7 @@ class space_point_transform(object):
         return tuple(map(cast, mat.flatten()))
     def __call__(self, data):
         """
-        Either concatenate this transformation object
+        Either concatenate (compose) this transformation object with another
         or apply it to a point.
 
         When concatenating transforms,
@@ -1030,7 +1030,7 @@ class space_point_transform(object):
                     curvature = self.curvature
                     )
             if self.matrix is not None:
-                if self.matrix.shape != data.add.shape:
+                if self.matrix.shape != data.matrix.shape:
                     raise ValueError('Dimensionality does not match')
                 return space_point_transform(
                     self.matrix @ data.matrix,
@@ -1041,7 +1041,7 @@ class space_point_transform(object):
     def __add__(self, other):
         """
         For convenience, you are also allowed to write
-        concatenation/application as an addition.
+        concatenation (composition)/application as an addition.
 
         When concatenating transforms,
         since we use the left transform convention,

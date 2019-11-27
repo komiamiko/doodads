@@ -19,7 +19,7 @@ from math import isclose, exp, sqrt, hypot, asinh, acosh
 from fractions import Fraction
 
 # the thing we want to test
-from hype import space, space_point, common_math, to_real
+from hype import space, space_point, space_point_transform, common_math, to_real
 
 def point_isclose(a, b, *args, **kwargs):
     """
@@ -380,6 +380,38 @@ class TestSpacePoint(unittest.TestCase):
             p.x,
             [ch1_ref, sh1_ref, 0]
             ))))
+
+    def test_init_edge_cases(self):
+        """
+        Possible edge cases for the initializer.
+        """
+
+        # use K = 1
+        s = space(curvature=1)
+
+        # 0-dimensional point is always [1]
+        p = s.make_point((), 1)
+        self.assertTrue(p[0] == 1)
+
+        # 1-dimensional negative direction
+        p = s.make_point((-1,), 1)
+        self.assertTrue(p[1] < 0)
+
+        # 1-dimensional negative magnitude
+        p = s.make_point((1,), -1)
+        self.assertTrue(p[1] < 0)
+
+        # 1-dimensional looping
+        p = s.make_point((1,), 2)
+        self.assertTrue(p[1] < 0)
+
+        # 1-dimensional zero point
+        p = s.make_point((0,), 1)
+        self.assertTrue(p[1] == 0)
+
+        # 1-dimensional zero point again but with normalize flag
+        p = s.make_point((0,), 1, normalize=True)
+        self.assertTrue(p[1] == 0)
 
     def test_repr(self):
         """
@@ -776,14 +808,14 @@ class TestPointOperations(unittest.TestCase):
             ((1,), 3),
             ((3/5, 4/5), 1),
             ((-4/5, 3/5), 2),
-            ((3/7, 0, -6/7, -2/7), 7),
-            ((0, -18/25, 0, 0, 11/25, -12/25, -6/25), 6)
+            ((3/7, 0, -6/7, -2/7), 3),
+            ((0, -18/25, 0, 0, 11/25, -12/25, -6/25), 3)
             ):
             p = s.make_point(rp[0], rp[1])
             self.assertTrue(isclose(
                 abs(-p + p),
                 0,
-                abs_tol=p[0]*1e-12
+                abs_tol=1e-12
                 ))
             p2 = s.make_point(rp[0], rp[1] * 2)
             self.assertTrue(point_isclose(
@@ -844,6 +876,124 @@ class TestPointOperations(unittest.TestCase):
         
         for k in (1/11, -1/11, 11, -2):
             self._test_parallel_transport(k=k)
+
+    def test_scalar_multiples(self):
+        """
+        Tests scalar multiplication for points in space.
+        """
+
+        # test for all kinds of curvatures K
+        for k in (0, 1, -1, 1/11, -1/11, 11, -3):
+            
+            s = space(curvature=k)
+
+            # use a small enough magnitude to not break math for very negative K
+            magic = 0.33377777373737737777
+            phi_ref = 1.61803398874989484820458683436559
+            for rp in (
+                (),
+                (1,),
+                (4/5, -3/5),
+                (0, 2/11, -6/11, 9/11),
+                ):
+                p = s.make_point(rp, magic)
+
+                # ensure: (0) p = 0
+                self.assertTrue(point_isclose(
+                    p * 0,
+                    s.make_origin(len(p)-1)
+                    ))
+
+                # ensure: (-1) p = -p
+                self.assertTrue(point_isclose(
+                    p * -1,
+                    -p
+                    ))
+
+                # ensure: (2) p = 2p = p + p
+                p2 = p + p
+                self.assertTrue(point_isclose(
+                    p * 2,
+                    p2
+                    ))
+
+                # ensure: (4) p = (2) (2p)
+                p4 = p2 + p2
+                self.assertTrue(point_isclose(
+                    p * 4,
+                    p2 * 2
+                    ))
+
+                # ensure: (5) p = 5p = 2(2p) + p
+                p5 = p4 + p
+                self.assertTrue(point_isclose(
+                    p * 5,
+                    p5
+                    ))
+                
+                # don't do non-integer tests for K > 0 because looping strangeness
+                if k <= 0:
+                    # ensure: (phi) (phi p) = (phi) p + p
+                    pphi = p * phi_ref
+                    self.assertTrue(point_isclose(
+                        pphi * phi_ref,
+                        pphi + p
+                        ))
+
+    def test_transform_compose(self):
+        """
+        Tests the concatenation/composition of transformations.
+        In short, the expected identity is
+        (f g) x = f (g x)
+        """
+
+        # test for all kinds of curvatures K
+        for k in (0, 1, -1, 1/11, -1/11, 11, -2):
+            
+            s = space(curvature=k)
+
+            # use a small enough magnitude to not break math for very negative K
+            magic = 0.33377777373737737777
+
+            p = s.make_point((2/11, 6/11, 9/11), magic)
+            q = s.make_point((3/7, 6/7, 2/7), magic)
+            r = s.make_point((9/17, 8/17, 12/17), magic)
+
+            f, g, h = map(space_point_transform, (p, q, r))
+
+            # check the core principle: (f g) x = f (g x)
+            self.assertTrue(point_isclose(
+                (f(g))(r),
+                f(g(r))
+                ))
+
+            # just for good measure, let's do it again with different vars
+            self.assertTrue(point_isclose(
+                (g(h))(p),
+                g(h(p))
+                ))
+
+            def check_transform_eq(t1, t2, invert=False):
+                for ref in (p, q, r):
+                    self.assertTrue(invert ^ point_isclose(
+                        t1(ref),
+                        t2(ref)
+                        ))
+
+            # api says f(g) == f + g
+            # this is just a convenience to let you write things with a sum instead of a product
+            check_transform_eq(f(g), f + g)
+
+            # non-commutative property
+            check_transform_eq(f+g, g+f, invert=(k!=0))
+
+            # associative property
+            check_transform_eq(f+g+h, f+(g+h))
+
+            # self commutative property
+            f2 = f+f
+            check_transform_eq(f2+f, f+f2)
+            check_transform_eq(f2+f2, f+f2+f)
         
     def test_rotation_isometry(self):
         pass # TODO
