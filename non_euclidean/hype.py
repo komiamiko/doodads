@@ -57,6 +57,7 @@ def extend_math_namespace(*inherits):
     - tau = 2 pi
     - pi = tau / 2
     - e = exp(1)
+    - eps = a small value
     - exp = x -> e^x
     - sqrt = x -> x^(1/2)
     - cbrt = x -> x^(1/3)
@@ -71,6 +72,8 @@ def extend_math_namespace(*inherits):
         ns.pi = ns.tau / ns.real(2)
     if not hasattr(ns, 'e'):
         ns.e = ns.exp(ns.real(1))
+    if not hasattr(ns, 'eps'):
+        ns.eps = ns.exp(-32)
     if not hasattr(ns, 'exp'):
         ns.exp = functools.partial(operator.pow, ns.e)
     if not hasattr(ns, 'sqrt'):
@@ -147,17 +150,24 @@ def extend_math_namespace(*inherits):
 
 common_math = extend_math_namespace(math, {'real': float})
 
-def mp_namespace(_nonce=[]):
+def mp_namespace(dps=15, _nonce=[]):
     """
     Returns a namespace using mpmath's multiple precision real numbers
     instead of the built-in floats.
     Will return an identical object in future calls.
     Warning: imports mpmath. You will need mpmath.
+
+    Setting dps through this method will allow for calculating an appropriate
+    epsilon value.
     """
     if _nonce:
         return _nonce[0]
     from mpmath import mp
-    result = extend_math_namespace(mp, {'real': mp.mpf})
+    mp.dps = 15
+    result = extend_math_namespace(mp, {
+        'real': mp.mpf,
+        'eps': mp.mpf(10) ** -(dps-3)
+        })
     _nonce.append(result)
     return result
 
@@ -765,6 +775,11 @@ class abc_space(object):
         # TODO find formula for and implement the metric tensor
         # also remember to put the formula in the doc comment because we're nice
         raise NotImplementedError
+    def dot_product(self, p, q):
+        """
+        Alias for .metric(p, q)
+        """
+        return self.metric(p, q)
 
 class _projection_types(enum.Enum):
     drop_extra_axis = 1
@@ -845,20 +860,34 @@ class space_point(collections.abc.Sequence):
             )
     def __sub__(self, other):
         return self.home.distance_between(self, other)
-    def __mul__(self, fac):
+    def __mul__(self, other):
         """
+        For scalar other thing:
         Scale the point as a vector, by a scalar factor.
+
+        For point other thing:
+        Compute the metric tensor (dot product) value.
+        See method space.metric for more information.
         """
+        if isinstance(other, space_point):
+            return self.home.metric(self, other)
+        
         home = self.home
         math = home.math
         real = math.real
 
-        magnitude = abs(self) * fac
+        magnitude = abs(self) * other
         if magnitude == 0:
             return home.make_origin(len(self) - 1)
 
         direction = self[1:]
         return home.make_point(direction, magnitude, normalize=True)
+    def __rmul__(self, other):
+        """
+        All multiplication operations are commutative,
+        so we just redirect to the regular __mul__
+        """
+        return self * other
     def project(self, projection_type):
         """
         Project this point to the regular boring Euclidean plane
@@ -1355,6 +1384,11 @@ class elliptic_space(abc_space):
         math = self.math
         real = math.real
         x = to_real(real, x)
+        # sometimes float math is not nice, so we take care of values that
+        # end up just outside the range
+        r1 = real(1)
+        if r1 <= x <= r1 + math.eps:return 0
+        if -r1 >= x >= -r1 - math.eps:return math.pi
         return math.acos(x)
     def asin(self, x):
         """
@@ -1437,6 +1471,10 @@ class hyperbolic_space(abc_space):
         math = self.math
         real = math.real
         x = to_real(real, x)
+        # sometimes float math is not nice, so we take care of values that
+        # end up just outside the range
+        r1 = real(1)
+        if r1 - math.eps <= x <= r1:return 0
         return math.acosh(x)
     def asin(self, x):
         """

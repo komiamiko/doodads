@@ -606,6 +606,96 @@ class TestTriangles(unittest.TestCase):
                         m
                         ))
 
+    def test_elliptic_special_triangles(self):
+        """
+        We test some special triangles in the space with K = 1.
+        Some of these are not really triangles because at least
+        one of the internal angles is a half turn.
+        That's okay. We can have those tricks in elliptic spaces.
+
+        As it turns out, setting an internal angle to a half turn can
+        break some math, so we have to explicitly prevent testing
+        of some cases.
+        """
+        import itertools
+
+        s = space(1)
+
+        # turning constants in radians
+        t1_ref = 6.28318530717958647692528676655867
+        t2_ref = t1_ref / 2
+        t3_ref = t1_ref / 3
+        t4_ref = t1_ref / 4
+        t6_ref = t1_ref / 6
+        magic = 7.77733337337373737373
+        tm_ref = t1_ref / magic
+        nagic = magic - 4 # strangely named other magic constant
+        tn_ref = t1_ref / nagic
+        # area constant
+        sm = space(0).sphere_s2(1)
+
+        # test with each known triangle
+        for a, C, b, A, c, B, m in (
+            (t3_ref, t2_ref, t3_ref, t2_ref, t3_ref, t2_ref, sm / 2), # literally a hemisphere, which takes up the entire space
+            (t2_ref, t4_ref, t4_ref, t2_ref, t4_ref, t4_ref, sm / 4), # diangle which is 1/4 of the sphere
+            (t2_ref, tm_ref, t3_ref, t2_ref, t6_ref, tm_ref, sm / magic), # a different diangle
+            (t2_ref, tn_ref, t3_ref, t2_ref, t6_ref, tn_ref, sm / nagic), # a different diangle, obtuse angle this time
+            (t4_ref, t4_ref, t4_ref, t4_ref, t4_ref, t4_ref, sm / 8), # triangle with 3 right angles
+            (t4_ref, tm_ref, t4_ref, t4_ref, tm_ref, t4_ref, sm / magic / 2), # different slice of the previous one, has 2 right angles
+            (t4_ref, tn_ref, t4_ref, t4_ref, tn_ref, t4_ref, sm / nagic / 2), # another one but with an obtuse angle
+            ):
+            # go through all vertex permutations
+            for (a, A), (b, B), (c, C) in itertools.permutations([(a, A), (b, B), (c, C)], 3):
+                self.assertTrue(isclose(
+                    s.cosine_law_side(a, b, C),
+                    c
+                    ))
+                self.assertTrue(t2_ref in (A, B) or isclose(
+                    s.cosine_law_angle(a, b, c),
+                    C,
+                    rel_tol = 1e-5
+                    ))
+                self.assertTrue(isclose(
+                    s.dual_cosine_law_angle(A, B, c),
+                    C,
+                    rel_tol = 1e-5
+                    ))
+                self.assertTrue(t2_ref in (A, B) or isclose(
+                    s.dual_cosine_law_side(A, B, C),
+                    c
+                    ))
+                self.assertTrue(A == t2_ref or isclose(
+                    s.sine_law_side(a, A, B),
+                    b,
+                    rel_tol = 1e-5,
+                    abs_tol = 1e-15
+                    ) or isclose(
+                    s.sine_law_side(a, A, B),
+                    t2_ref - b,
+                    rel_tol = 1e-5,
+                    abs_tol = 1e-15
+                    ))
+                self.assertTrue(A == t2_ref or isclose(
+                    s.sine_law_angle(a, A, b),
+                    B,
+                    rel_tol = 1e-5,
+                    abs_tol = 1e-15
+                    ) or B > t4_ref and isclose( # SSA triangle solving strangeness
+                    s.sine_law_angle(a, A, b),
+                    t2_ref - B,
+                    rel_tol = 1e-5,
+                    abs_tol = 1e-15
+                    ))
+                self.assertTrue((A, B, C).count(t2_ref) == 1 or isclose(
+                    s.triangle_area_from_sides(a, b, c),
+                    m,
+                    rel_tol = 1e-5
+                    ))
+                self.assertTrue(isclose(
+                    s.triangle_area_from_angles(A, B, C),
+                    m
+                    ))
+
 class TestSpheres(unittest.TestCase):
     """
     N-dimensional spheres (and balls, to be pedantic)
