@@ -626,11 +626,17 @@ class TestTriangles(unittest.TestCase):
         t2_ref = t1_ref / 2
         t3_ref = t1_ref / 3
         t4_ref = t1_ref / 4
+        t5_ref = t1_ref / 5
         t6_ref = t1_ref / 6
+        # random number
         magic = 7.77733337337373737373
         tm_ref = t1_ref / magic
         nagic = magic - 4 # strangely named other magic constant
         tn_ref = t1_ref / nagic
+        # tetrahedron edge central angle
+        p4_ref = 1.91063323624901855632771420503144 # = acos(-1/3)
+        # icosahedron edge central angle
+        p20_ref = 1.10714871779409050301706546017856 # = atan(2)
         # area constant
         sm = space(0).sphere_s2(1)
 
@@ -643,6 +649,8 @@ class TestTriangles(unittest.TestCase):
             (t4_ref, t4_ref, t4_ref, t4_ref, t4_ref, t4_ref, sm / 8), # triangle with 3 right angles
             (t4_ref, tm_ref, t4_ref, t4_ref, tm_ref, t4_ref, sm / magic / 2), # different slice of the previous one, has 2 right angles
             (t4_ref, tn_ref, t4_ref, t4_ref, tn_ref, t4_ref, sm / nagic / 2), # another one but with an obtuse angle
+            (p4_ref, t3_ref) * 3 + (sm / 4,), # regular tetrahedron face, projected onto the sphere
+            (p20_ref, t5_ref) * 3 + (sm / 20,) # regular icosahedron face, projected onto the sphere
             ):
             # go through all vertex permutations
             for (a, A), (b, B), (c, C) in itertools.permutations([(a, A), (b, B), (c, C)], 3):
