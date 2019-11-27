@@ -547,7 +547,7 @@ class TestTriangles(unittest.TestCase):
         """
         import itertools
 
-        s = space(0)
+        s = space(curvature=0)
 
         # turning constants in radians
         t1_ref = 6.28318530717958647692528676655867
@@ -619,7 +619,7 @@ class TestTriangles(unittest.TestCase):
         """
         import itertools
 
-        s = space(1)
+        s = space(curvature=1)
 
         # turning constants in radians
         t1_ref = 6.28318530717958647692528676655867
@@ -702,6 +702,73 @@ class TestTriangles(unittest.TestCase):
                 self.assertTrue(isclose(
                     s.triangle_area_from_angles(A, B, C),
                     m
+                    ))
+
+    def test_hyperbolic_tiles(self):
+        """
+        There aren't really "special triangles" in hyperbolic space
+        known to us Euclidean dwellers.
+        So instead, we test some known hyperbolic tilings.
+        We will generate them all on the fly.
+        """
+        import itertools
+
+        s = space(curvature=-1)
+
+        # turning constants in radians
+        t1_ref = 6.28318530717958647692528676655867
+        t2_ref = t1_ref / 2
+        t4_ref = t1_ref / 4
+
+        def make_triangle(f, v):
+            f = t1_ref / f
+            v = t1_ref / v / 2
+            a = (common_math.cos(f) + 1)/common_math.sin(v)**2 - 1
+            a = common_math.sqrt(a**2 - 1)
+            b = a / common_math.sin(f) * common_math.sin(v)
+            a = common_math.asinh(a)
+            b = common_math.asinh(b)
+            return a, v, b, f, b, v
+
+        for p, q in itertools.product(*[range(3,11)]*2):
+            # skip ones that don't result in hyperbolic tilings
+            if p * q < 20:continue
+
+            a, C, b, A, c, B = make_triangle(p, q)
+
+            # try all vertex permutations
+            for (a, A), (b, B), (c, C) in itertools.permutations([(a, A), (b, B), (c, C)], 3):
+                self.assertTrue(isclose(
+                    s.cosine_law_side(a, b, C),
+                    c
+                    ))
+                self.assertTrue(isclose(
+                    s.cosine_law_angle(a, b, c),
+                    C
+                    ))
+                self.assertTrue(isclose(
+                    s.dual_cosine_law_angle(A, B, c),
+                    C
+                    ))
+                self.assertTrue(isclose(
+                    s.dual_cosine_law_side(A, B, C),
+                    c
+                    ))
+                self.assertTrue(isclose(
+                    s.sine_law_side(a, A, B),
+                    b
+                    ))
+                self.assertTrue(isclose(
+                    s.sine_law_angle(a, A, b),
+                    B,
+                    rel_tol = 1e-5 # have to go easier on it since asin is really sensitive around 1
+                    ) or B > t4_ref and isclose( # SSA triangle solving strangeness
+                        s.sine_law_angle(a, A, b),
+                        t2_ref - B
+                        ))
+                self.assertTrue(isclose(
+                    s.triangle_area_from_sides(a, b, c),
+                    s.triangle_area_from_angles(A, B, C)
                     ))
 
 class TestSpheres(unittest.TestCase):

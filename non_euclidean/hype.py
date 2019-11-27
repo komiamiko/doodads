@@ -64,6 +64,8 @@ def extend_math_namespace(*inherits):
     - hypot = (x,y) -> sqrt(x^2 + y^2)
     - asinh = x -> log(x + sqrt(x^2 + 1))
     - acosh = x -> log(x + sqrt(x^2 - 1))
+    - asin_safe = asin but it accepts values just outside of the usual range
+    - acos_safe = acos but it accepts values just outside of the usual range
     """
     ns = joined_namespace(*inherits)
     if not hasattr(ns, 'tau'):
@@ -127,10 +129,12 @@ def extend_math_namespace(*inherits):
                 """
                 patched math function
                 see docs for math.acosh
+                can take some values just outside of the range [1, inf]
                 """
+                if ns.real(1) - ns.eps <= x <= ns.real(1):return ns.real(0)
                 return ns.log(x + ns.sqrt(x*x - ns.real(1)))
             return i_acosh
-        ns.asinh = _acosh(ns)
+        ns.acosh = _acosh(ns)
     if not hasattr(ns, 're'):
         def _re(ns):
             def i_re(z):
@@ -146,6 +150,32 @@ def extend_math_namespace(*inherits):
                 raise TypeError('Don\'t know how to get the real component of that')
             return i_re
         ns.re = _re(ns)
+    if not hasattr(ns, 'asin_safe'):
+        def _asin(ns):
+            def i_asin(x):
+                """
+                patched math function
+                see docs for math.asin
+                can take some values just outside of the range [-1, 1]
+                """
+                if ns.real(1) <= x <= ns.real(1) + ns.eps:return ns.tau / ns.real(4)
+                if -ns.real(1) >= x >= -ns.real(1) - ns.eps:return -ns.tau / ns.real(4)
+                return ns.asin(x)
+            return i_asin
+        ns.asin_safe = _asin(ns)
+    if not hasattr(ns, 'acos_safe'):
+        def _acos(ns):
+            def i_acos(x):
+                """
+                patched math function
+                see docs for math.acos
+                can take some values just outside of the range [-1, 1]
+                """
+                if ns.real(1) <= x <= ns.real(1) + ns.eps:return 0
+                if -ns.real(1) >= x >= -ns.real(1) - ns.eps:return ns.pi
+                return ns.acos(x)
+            return i_acos
+        ns.acos_safe = _acos(ns)
     return ns
 
 common_math = extend_math_namespace(math, {'real': float})
@@ -571,7 +601,7 @@ class abc_space(object):
         a = to_real(real, a)
         b = to_real(real, b)
         c = to_real(real, c)
-        return math.acos(
+        return math.acos_safe(
             (self.cos(c) - self.cos(a) * self.cos(b)) /
             (self.sin(a) * self.sin(b) * real(self.curvature))
             )
@@ -602,7 +632,7 @@ class abc_space(object):
         A = to_real(real, A)
         B = to_real(real, B)
         c = to_real(real, c)
-        return math.acos(
+        return math.acos_safe(
             -math.cos(A)*math.cos(B) +
             math.sin(A)*math.sin(B)*self.cos(c)
             )
@@ -690,7 +720,7 @@ class abc_space(object):
         a = to_real(real, a)
         A = to_real(real, A)
         b = to_real(real, b)
-        return math.asin(math.sin(A) / self.sin(a) * self.sin(b))
+        return math.asin_safe(math.sin(A) / self.sin(a) * self.sin(b))
     def triangle_area_from_angles(self, A, B, C):
         """
         Computes the area of a triangle, given its angles.
@@ -1276,7 +1306,7 @@ class euclidean_space(abc_space):
         a = to_real(real, a)
         b = to_real(real, b)
         c = to_real(real, c)
-        return math.acos((a*a + b*b - c*c)/(a*b*real(2)))
+        return math.acos_safe((a*a + b*b - c*c)/(a*b*real(2)))
     def dual_cosine_law_angle(self, A, B, c):
         """
         A triangle looks like this:
@@ -1384,12 +1414,7 @@ class elliptic_space(abc_space):
         math = self.math
         real = math.real
         x = to_real(real, x)
-        # sometimes float math is not nice, so we take care of values that
-        # end up just outside the range
-        r1 = real(1)
-        if r1 <= x <= r1 + math.eps:return 0
-        if -r1 >= x >= -r1 - math.eps:return math.pi
-        return math.acos(x)
+        return math.acos_safe(x)
     def asin(self, x):
         """
         The inverse sine function.
@@ -1397,7 +1422,7 @@ class elliptic_space(abc_space):
         math = self.math
         real = math.real
         x = to_real(real, x)
-        return math.asin(x)
+        return math.asin_safe(x)
     def distance_between(self, p, q):
         """
         Computes the distance between 2 points in this space,
@@ -1471,10 +1496,6 @@ class hyperbolic_space(abc_space):
         math = self.math
         real = math.real
         x = to_real(real, x)
-        # sometimes float math is not nice, so we take care of values that
-        # end up just outside the range
-        r1 = real(1)
-        if r1 - math.eps <= x <= r1:return 0
         return math.acosh(x)
     def asin(self, x):
         """
@@ -1651,3 +1672,4 @@ class space(abc_space):
         return self.base.sine_law_angle(self, a, A, b)
     def distance_between(self, p, q):
         return self.base.distance_between(self, p, q)
+
