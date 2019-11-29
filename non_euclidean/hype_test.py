@@ -566,7 +566,8 @@ class TestTriangles(unittest.TestCase):
             (1, t6_ref, 1, t6_ref, 1, t6_ref, sqrt3_ref/4), # 1 1 1 (equilateral)
             (1, t4_ref, 1, t8_ref, sqrt2_ref, t8_ref, 1/2), # 1 1 sqrt2 (right isoceles)
             (1, t4_ref, sqrt3_ref, t12_ref, 2, t6_ref, sqrt3_ref/2), # 1 sqrt3 2 (right)
-            (1, t3_ref, 1, t12_ref, sqrt3_ref, t12_ref, sqrt3_ref/4) # 1 1 sqrt3 (obtuse isoceles)
+            (1, t3_ref, 1, t12_ref, sqrt3_ref, t12_ref, sqrt3_ref/4), # 1 1 sqrt3 (obtuse isoceles)
+            (sqrt2_ref, t8_ref + t6_ref, 2, t12_ref, 1 + sqrt3_ref, t8_ref, (1 + sqrt3_ref)/2) # sqrt2 2 1+sqrt3 (obtuse scalene)
             ):
             # try scaling them up and down too
             for scale in (1, 2, 1/3):
@@ -770,6 +771,83 @@ class TestTriangles(unittest.TestCase):
                     s.triangle_area_from_sides(a, b, c),
                     s.triangle_area_from_angles(A, B, C)
                     ))
+
+    def test_scaling(self):
+        """
+        Assuming that K = -1 and K = 1 are already tested to work,
+        let's test to make sure that triangles scale up and down correctly.
+        """
+        import itertools
+
+        # turning constants in radians
+        t1_ref = 6.28318530717958647692528676655867
+        t2_ref = t1_ref / 2
+        t4_ref = t1_ref / 4
+
+        # test positive and negative curvatures
+        for bk in (1, -1):
+            # different scaling factors
+            for r in (1, 4/5, 5/4, 3/4, 4/3, 2/3, 3/2, 1/2, 2):
+                # make the regular spaces
+                s1 = space(curvature=bk)
+                sr = space(curvature=bk/r**2)
+                # try some triangles
+                for a1, b1, c1 in (
+                    (1, 1, 1),
+                    (5/4, 1, 3/4),
+                    (5/6, 4/5, 3/4),
+                    (3/5, 1/2, 2/5),
+                    (1/5, 1/6, 1/7),
+                    (1/13, 1/17, 1/19)
+                    ):
+                    # calculate scaled side lengths
+                    ar, br, cr = a1 * r, b1 * r, c1 * r
+                    # calculate angles
+                    A = s1.cosine_law_angle(b1, c1, a1)
+                    B = s1.cosine_law_angle(c1, a1, b1)
+                    C = s1.cosine_law_angle(a1, b1, c1)
+                    # calculate mass
+                    m1 = s1.triangle_area_from_angles(A, B, C)
+                    mr = m1 * r**2
+                    # try all vertex permutations
+                    for (a1, ar, A), (b1, br, B), (c1, cr, C) in itertools.permutations([(a1, ar, A), (b1, br, B), (c1, cr, C)], 3):
+                        # do scaling tests
+                        self.assertTrue(isclose(
+                            sr.cosine_law_side(ar, br, C),
+                            cr
+                            ))
+                        self.assertTrue(isclose(
+                            sr.cosine_law_angle(ar, br, cr),
+                            C
+                            ))
+                        self.assertTrue(isclose(
+                            sr.dual_cosine_law_angle(A, B, cr),
+                            C
+                            ))
+                        self.assertTrue(isclose(
+                            sr.dual_cosine_law_side(A, B, C),
+                            cr
+                            ))
+                        self.assertTrue(isclose(
+                            sr.sine_law_side(ar, A, B),
+                            br
+                            ))
+                        self.assertTrue(isclose(
+                            sr.sine_law_angle(ar, A, br),
+                            B,
+                            rel_tol = 1e-5 # have to go easier on it since asin is really sensitive around 1
+                            ) or B > t4_ref and isclose( # SSA triangle solving strangeness
+                                sr.sine_law_angle(ar, A, br),
+                                t2_ref - B
+                                ))
+                        self.assertTrue(isclose(
+                            sr.triangle_area_from_sides(ar, br, cr),
+                            mr
+                            ))
+                        self.assertTrue(isclose(
+                            sr.triangle_area_from_angles(A, B, C),
+                            mr
+                            ))
 
 class TestSpheres(unittest.TestCase):
     """
