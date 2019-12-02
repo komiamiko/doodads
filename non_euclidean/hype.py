@@ -794,22 +794,28 @@ class abc_space(object):
             map((lambda tup:(tup[0] - tup[1])**2), zip(p[1:], q[1:])),
             real(0))
         return real(2) * self.asin(math.sqrt(x) / real(2))
-    def metric(self, p, q):
-        """
-        Computes the metric tensor value for 2 points in this space.
-        Generalizes the concept of a dot product to non-Euclidean spaces.
-        Is taken about the origin. If you want to take the metric tensor
-        about a different point, first parallel transport the vectors so that
-        the point becomes the origin.
-        """
-        # TODO find formula for and implement the metric tensor
-        # also remember to put the formula in the doc comment because we're nice
-        raise NotImplementedError
     def dot_product(self, p, q):
         """
-        Alias for .metric(p, q)
+        Computes the dot product for points p, q as vectors from the origin
+        Dot product · has the following properties:
+        - p·q is bilinear (linear in both p and q)
+        - p·q = q·p
+        - p·p = |p|^2
+        - cos(θ) = p·q/(|p| |q|)
+
+        There really isn't a fancy formula for this.
+        We just get the usual magnitudes and combine that with
+        the Euclidean dot product formula.
         """
-        return self.metric(p, q)
+        math = self.math
+        square = lambda x:x*x
+        pm2 = sum(map(square, p[1:]))
+        qm2 = sum(map(square, q[1:]))
+        pm = math.sqrt(pm2)
+        qm = math.sqrt(qm2)
+        dot = sum(itertools.starmap(operator.mul, zip(p[1:], q[1:])))
+        dot = dot * self.asin(pm) / pm * self.asin(qm) / qm
+        return dot
 
 class _projection_types(enum.Enum):
     drop_extra_axis = 1
@@ -900,7 +906,7 @@ class space_point(collections.abc.Sequence):
         See method space.metric for more information.
         """
         if isinstance(other, space_point):
-            return self.home.metric(self, other)
+            return self.home.dot_product(self, other)
         
         home = self.home
         math = home.math
@@ -1040,7 +1046,7 @@ class space_point_transform(object):
         D = (x0 - 1)/(x1^2 + x2^2 + ... + xk^2)
         it's just an intermediate constant, it doesn't really mean anything
         T[0,0] = x0
-        T[0,i] = -K xi        |  i =/= 0
+        T[0,i] = -K xi       |  i =/= 0
         T[i,0] = xi          |  i =/= 0
         T[i,i] = 1 + xi^2 D  |
         T[i,j] = xi xj D     |  i =/= j,  i,j =/= 0
@@ -1099,6 +1105,27 @@ class space_point_transform(object):
         """
         import numpy
         return tuple(map(cast, mat.flatten()))
+    def _make_matrix(self):
+        """
+        Force self to have a matrix.
+
+        Will only have an interesting effect for K = 0,
+        because otherwise we always use a matrix anyway.
+        """
+        if self.matrix is not None:return
+        # now we know K =/= 0
+        
+        import numpy
+
+        n = len(self.add)
+        # guess the type
+        number_type = type(self.add[0] or 0.0)
+
+        # identity matrix with adding column
+        t = numpy.eye(n+1, dtype=number_type)
+        t[1:,0] = self.add
+
+        self.matrix = t
     def __call__(self, data):
         """
         Either concatenate (compose) this transformation object with another
@@ -1131,13 +1158,18 @@ class space_point_transform(object):
             if self.curvature != data.curvature:
                 raise ValueError('Curvatures do not match')
             if self.add is not None:
-                if len(self.add) != len(data.add):
-                    raise ValueError('Dimensionality does not match')
-                return space_point_transform(
-                    tuple(map(sum, zip(self.add, data.add))),
-                    curvature = self.curvature
-                    )
+                if data.add is None:
+                    self._make_matrix()
+                else:
+                    if len(self.add) != len(data.add):
+                        raise ValueError('Dimensionality does not match')
+                    return space_point_transform(
+                        tuple(map(sum, zip(self.add, data.add))),
+                        curvature = self.curvature
+                        )
             if self.matrix is not None:
+                if data.matrix is None:
+                    data._make_matrix()
                 if self.matrix.shape != data.matrix.shape:
                     raise ValueError('Dimensionality does not match')
                 return space_point_transform(
@@ -1158,6 +1190,53 @@ class space_point_transform(object):
         and then this one.
         """
         return self(other)
+    def __mul__(self, other):
+        """
+        Computes the iterated transform for this transform object.
+        Looks like a scalar power but implemented with the multiply operator.
+
+        Uses numpy.linalg for computation of integer matrix powers.
+        You should already have numpy if you got this far, so that's okay.
+
+        For fractional matrix powers, requires scipy.
+        You may need to install scipy separately.
+        """
+        import numbers
+
+        if not isinstance(other, numbers.Real):
+            raise TypeError('For transforms, this operation (*) is not defined for non-real argument')
+
+        if other == 1:
+            return self
+
+        if self.add is not None:
+            scale_func = functools.partial(operator.mul, other)
+
+            return space_point_transform(
+                tuple(map(scale_func, self.add)),
+                self.curvature
+                )
+
+        if isinstance(other, int):
+            from numpy.linalg import matrix_power
+            
+            return space_point_transform(
+                matrix_power(self.matrix, other),
+                curvature = self.curvature
+                )
+
+        from scipy.linalg import fractional_matrix_power
+
+        return space_point_transform(
+            fractional_matrix_power(self.matrix, other),
+            curvature = self.curvature
+            )
+    def __rmul__(self, other):
+        """
+        Redirects to the regular __mul__ since
+        all our defined operations are commutative.
+        """
+        return self * other
 
 class euclidean_space(abc_space):
     """

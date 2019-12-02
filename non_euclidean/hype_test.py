@@ -1323,12 +1323,116 @@ class TestPointOperations(unittest.TestCase):
             check_transform_eq(f2+f2, f+f2+f)
 
     def test_transform_multiples(self):
-        pass # TODO
+        """
+        Test iterated, inverse, and fractional transforms.
+        """
+
+        # test for all kinds of curvatures K
+        for k in (0, 1, -1, 1/11, -1/11, 11, -2):
+            
+            s = space(curvature=k)
+
+            # use a small enough magnitude to not break math for very negative K
+            magic = 0.33377777373737737777
+
+            o = s.make_origin(3)
+            p = s.make_point((2/11, 6/11, 9/11), magic)
+            q = s.make_point((3/7, 6/7, 2/7), magic)
+
+            f, g, i = map(space_point_transform, (p, q, o))
+
+            def check_transform_eq(t1, t2, invert=False):
+                for ref in (
+                    s.make_point((9/17, 8/17, 12/17), magic),
+                    s.make_point((0, 3/5, 4/5), magic)
+                    ):
+                    self.assertTrue(invert ^ point_isclose(
+                        t1(ref),
+                        t2(ref)
+                        ))
+
+            # check f^0 = I
+            check_transform_eq(f * 0, i)
+            check_transform_eq(g * 0, i)
+            check_transform_eq(i * 0, i)
+
+            # check f^1 = f
+            check_transform_eq(f * 1, f)
+            check_transform_eq(g * 1, g)
+            check_transform_eq(i * 1, i)
+
+            # check f^-1 is correct inverse of f
+            check_transform_eq(f * -1,
+                               space_point_transform(p * -1))
+            check_transform_eq(g * -1,
+                               space_point_transform(q * -1))
+
+            # check f^n is correct iterated f
+            check_transform_eq(f * 3,
+                               space_point_transform(p * 3))
+            check_transform_eq(g * 5,
+                               space_point_transform(q * 5))
+            check_transform_eq(f * 19,
+                               space_point_transform(p * 19))
+            check_transform_eq(g * 21,
+                               space_point_transform(q * 21))
+
+            # check f^(1/n) f is correct fractional f
+            hf = f * 0.5
+            check_transform_eq(hf + hf, f)
+            hg = g * 0.25
+            check_transform_eq(hg * 4, g)
+        
     def test_rotation_isometry(self):
-        pass # TODO
+        """
+        Test that some simple rotation isometries behave as expected.
+        """
+        import numpy
+
+        # test for all kinds of curvatures K
+        for k in (0, 1, -1, 1/11, -1/11, 11, -2):
+            
+            s = space(curvature=k)
+
+            # use a small enough magnitude to not break math for very negative K
+            magic = 0.33377777373737737777
+            # 1/sqrt(2)
+            s2_ref = 0.707106781186547524400844362104785
+
+            o = s.make_origin(2)
+            p = s.make_point((1, 0), magic)
+            q = s.make_point((s2_ref, s2_ref), magic)
+
+            rot = space_point_transform(
+                numpy.array([[1,0,0],[0,s2_ref,-s2_ref],[0,s2_ref,s2_ref]]),
+                curvature=k
+                )
+
+            f, g, i = map(space_point_transform, (p, q, o))
+
+            def check_transform_eq(t1, t2, invert=False):
+                for ref in (
+                    s.make_point((5/13, 12/13), magic),
+                    s.make_point((-3/5, 4/5), magic)
+                    ):
+                    self.assertTrue(invert ^ point_isclose(
+                        t1(ref),
+                        t2(ref),
+                        abs_tol = 1e-12
+                        ))
+
+            # 1/8 turn, times 8
+            check_transform_eq(rot*8, i)
+
+            # rotate, shift, rotate
+            check_transform_eq(g, rot + f + rot * -1)
+
+            # the other way
+            check_transform_eq(f, rot * -1 + g + rot)
+            
     def test_polygon_walk(self):
         pass # TODO
-    def test_metric(self):
+    def test_dot_product(self):
         pass # TODO
     def test_project(self):
         pass # TODO
