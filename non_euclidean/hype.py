@@ -11,6 +11,7 @@ If you find a math error, do report it!
 
 import math
 import functools
+import itertools
 import operator
 import enum
 import collections.abc
@@ -814,7 +815,10 @@ class abc_space(object):
         pm = math.sqrt(pm2)
         qm = math.sqrt(qm2)
         dot = sum(itertools.starmap(operator.mul, zip(p[1:], q[1:])))
-        dot = dot * self.asin(pm) / pm * self.asin(qm) / qm
+        if pm != 0:
+            dot *= self.asin(pm) / pm
+        if qm != 0:
+            dot *= self.asin(qm) / qm
         return dot
 
 class _projection_types(enum.Enum):

@@ -1326,10 +1326,13 @@ class TestPointOperations(unittest.TestCase):
         """
         Test iterated, inverse, and fractional transforms.
         """
+        
+        t1_ref = 6.28318530717958647692528676655867
+        t4_ref = t1_ref / 4
 
         # test for all kinds of curvatures K
         for k in (0, 1, -1, 1/11, -1/11, 11, -2):
-            
+
             s = space(curvature=k)
 
             # use a small enough magnitude to not break math for very negative K
@@ -1341,7 +1344,8 @@ class TestPointOperations(unittest.TestCase):
 
             f, g, i = map(space_point_transform, (p, q, o))
 
-            def check_transform_eq(t1, t2, invert=False):
+            def check_transform_eq(t1, t2, invert=False, skip=None):
+                if skip:return
                 for ref in (
                     s.make_point((9/17, 8/17, 12/17), magic),
                     s.make_point((0, 3/5, 4/5), magic)
@@ -1350,6 +1354,12 @@ class TestPointOperations(unittest.TestCase):
                         t1(ref),
                         t2(ref)
                         ))
+
+            def skip_test(n):
+                """
+                Should we skip this case?
+                """
+                return k > 0 and magic * n * k**0.5 >= t4_ref
 
             # check f^0 = I
             check_transform_eq(f * 0, i)
@@ -1369,13 +1379,17 @@ class TestPointOperations(unittest.TestCase):
 
             # check f^n is correct iterated f
             check_transform_eq(f * 3,
-                               space_point_transform(p * 3))
+                               space_point_transform(p * 3),
+                               skip = skip_test(3))
             check_transform_eq(g * 5,
-                               space_point_transform(q * 5))
+                               space_point_transform(q * 5),
+                               skip = skip_test(5))
             check_transform_eq(f * 19,
-                               space_point_transform(p * 19))
+                               space_point_transform(p * 19),
+                               skip = skip_test(19))
             check_transform_eq(g * 21,
-                               space_point_transform(q * 21))
+                               space_point_transform(q * 21),
+                               skip = skip_test(21))
 
             # check f^(1/n) f is correct fractional f
             hf = f * 0.5
@@ -1431,9 +1445,178 @@ class TestPointOperations(unittest.TestCase):
             check_transform_eq(f, rot * -1 + g + rot)
             
     def test_polygon_walk(self):
-        pass # TODO
+        """
+        Attempt to traverse the hyperbolic plane by following
+        the edges of a regular tiling.
+        """
+        import numpy
+
+        s = space(curvature=-1)
+
+        # turning constants in radians
+        t1_ref = 6.28318530717958647692528676655867
+        t2_ref = t1_ref / 2
+        t3_ref = t1_ref / 3
+        t4_ref = t1_ref / 4
+
+        def make_triangle(f, v):
+            f = t1_ref / f
+            v = t1_ref / v / 2
+            a = (common_math.cos(f) + 1)/common_math.sin(v)**2 - 1
+            a = common_math.sqrt(a**2 - 1)
+            b = a / common_math.sin(f) * common_math.sin(v)
+            a = common_math.asinh(a)
+            b = common_math.asinh(b)
+            return a, v, b, f, b, v
+
+        # use {7, 3} tiling
+
+        edge, angle, *_ = make_triangle(7, 3)
+
+        def check_walk_eq(t1, t2, invert=False):
+            for ref in (
+                s.make_origin(2),
+                s.make_point((3/5, 4/5), 1/3)
+                ):
+                self.assertTrue(invert ^ point_isclose(
+                    t1(ref),
+                    t2(ref),
+                    abs_tol = 1e-12
+                    ))
+
+        t1 = t2 = space_point_transform(s.make_origin(2))
+
+        def rotater(angle):
+            return space_point_transform(
+                numpy.array([
+                    [1, 0, 0],
+                    [0, numpy.cos(angle), -numpy.sin(angle)],
+                    [0, numpy.sin(angle), numpy.cos(angle)]
+                    ]),
+                curvature = -1
+                )
+
+        spin_half = rotater(t2_ref)
+        spin_left = rotater(angle)
+        spin_right = rotater(-angle)
+        forward = space_point_transform(s.make_point((1, 0), edge))
+
+        # do some walking in a circle to sanity test
+
+        t1 = forward + spin_half + spin_left + spin_half + spin_right + t1
+        t2 = forward + t2
+
+        check_walk_eq(t1, t2)
+
+        # spin around some more
+
+        t1 = forward + spin_left * 6 + spin_half + t1
+        t2 = forward + spin_half + t2
+
+        check_walk_eq(t1, t2)
+
+        # walk in a loop
+        t1 = (forward + spin_left) * 7 + t1
+
+        check_walk_eq(t1, t2)
+
+        # walk another way in a loop
+        t1 = (spin_right + forward) * 7 + t1
+
+        check_walk_eq(t1, t2)
+
+        # walk in a more complicated path
+
+        t2 = ((spin_right + forward) * 5 + spin_left + forward) * 2 + t2
+
+        check_walk_eq(t1, t2)
+
+        # a bigger loop
+
+        t2 = (spin_left + forward + (spin_right + forward) * 3) * 7 + t2
+
+        check_walk_eq(t1, t2)
+        
     def test_dot_product(self):
-        pass # TODO
+        """
+        Test that the dot product behaves as expected,
+        first using the properties of the dot product,
+        then using test vectors.
+        """
+        import itertools
+
+        # our little magic constant
+        magic = 0.33377777373737737777
+
+        # test for all kinds of curvatures K
+        for k in (0, 1, -1, 1/11, -1/11, 1 + magic, -1 - magic):
+            
+            s = space(curvature=k)
+
+            # special points
+            o = s.make_origin(3)
+
+            # property: P * P = 0 iff P is the origin
+            self.assertTrue(o * o == 0)
+            for direction in (
+                (1, 0, 0),
+                (3/5, 0, 4/5),
+                (3/7, 6/7, 2/7),
+                (2/11, 6/11, 9/11)
+                ):
+                for magnitude in (1, 0.01, magic, magic**7):
+                    p = s.make_point(direction, magnitude)
+                    self.assertTrue(p * p > 0)
+
+            for p, q in itertools.permutations((
+                (1, 0, 0),
+                (3/5, 0, 4/5),
+                (3/7, 6/7, 2/7),
+                (2/11, 6/11, 9/11)
+                ), 2):
+                p = s.make_point(p, magic)
+                q = s.make_point(q, magic)
+                # property: P * Q == Q * P
+                self.assertTrue(isclose(
+                    p * q,
+                    q * p
+                    ))
+                # property: bilinear
+                # we will only test with colinear points because curved space stuff
+                for t in (1, 2, -1, 0, magic, -magic, 1 + magic, magic ** 7):
+                    self.assertTrue(isclose(
+                        (p * t) * q,
+                        p * q * t
+                        ))
+                    self.assertTrue(isclose(
+                        (p * t + p) * q,
+                        p * q * (1 + t),
+                        abs_tol = 1e-12
+                        ))
+
+            # some test vectors
+            
+            for direction in (
+                (1, 0, 0),
+                (3/5, 0, 4/5),
+                (3/7, 6/7, 2/7),
+                (2/11, 6/11, 9/11)
+                ):
+                p = s.make_point(direction, magic)
+                self.assertTrue(isclose(p * p, magic ** 2))
+
+            p = s.make_point((1, 0), magic)
+            q = s.make_point((0, 1), magic)
+            self.assertTrue(isclose(p * q, 0))
+
+            p = s.make_point((1, 1), magic, normalize=True)
+            q = s.make_point((1, -1), magic, normalize=True)
+            self.assertTrue(isclose(p * q, 0))
+
+            p = s.make_point((2, 1), 5**0.5 * magic, normalize=True)
+            q = s.make_point((3, -1), 10**0.5 * magic, normalize=True)
+            self.assertTrue(isclose(p * q, 5 * magic**2))
+        
     def test_project(self):
         pass # TODO
 
