@@ -65,6 +65,8 @@ def extend_math_namespace(*inherits):
     - hypot = (x,y) -> sqrt(x^2 + y^2)
     - asinh = x -> log(x + sqrt(x^2 + 1))
     - acosh = x -> log(x + sqrt(x^2 - 1))
+    - asin from arcsin if available
+    - acos from arccos if available
     - asin_safe = asin but it accepts values just outside of the usual range
     - acos_safe = acos but it accepts values just outside of the usual range
     """
@@ -151,6 +153,10 @@ def extend_math_namespace(*inherits):
                 raise TypeError('Don\'t know how to get the real component of that')
             return i_re
         ns.re = _re(ns)
+    if not hasattr(ns, 'asin') and hasattr(ns, 'arcsin'):
+        ns.asin = ns.arcsin
+    if not hasattr(ns, 'acos') and hasattr(ns, 'arccos'):
+        ns.acos = ns.arccos
     if not hasattr(ns, 'asin_safe'):
         def _asin(ns):
             def i_asin(x):
@@ -820,6 +826,22 @@ class abc_space(object):
         if qm != 0:
             dot *= self.asin(qm) / qm
         return dot
+    def angle_between(self, p, q):
+        """
+        Get the angle between points.
+        Does part of the computation for the dot product,
+        but only the work needed to get the angle.
+        Special case: if either point is the origin, returns 0.
+        """
+        math = self.math
+        square = lambda x:x*x
+        pm2 = sum(map(square, p[1:]))
+        qm2 = sum(map(square, q[1:]))
+        pm = math.sqrt(pm2)
+        qm = math.sqrt(qm2)
+        if pm == 0 or qm == 0:return math.real(0)
+        dot = sum(itertools.starmap(operator.mul, zip(p[1:], q[1:])))
+        return math.acos(dot / (pm * qm))
 
 class _projection_types(enum.Enum):
     drop_extra_axis = 1
@@ -962,10 +984,10 @@ class space_point(collections.abc.Sequence):
         if projection_type == projection_types.drop_extra_axis:
             return tuple(self.x[1:])
         if projection_type == projection_types.preserve_angles:
-            ex = self.x[0]
+            ex = self.x[0] + self.home.math.real(1)
             return tuple(map((lambda x: x / ex), self.x[1:]))
         if projection_type == projection_types.preserve_lines:
-            ex = self.x[0] + self.home.math.real(1)
+            ex = self.x[0]
             return tuple(map((lambda x: x / ex), self.x[1:]))
         raise ValueError('Projection type unknown')
 

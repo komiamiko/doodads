@@ -19,7 +19,7 @@ from math import isclose, exp, sqrt, hypot, asinh, acosh
 from fractions import Fraction
 
 # the thing we want to test
-from hype import space, space_point, space_point_transform, common_math, to_real
+from hype import space, space_point, space_point_transform, common_math, to_real, projection_types
 
 def point_isclose(a, b, *args, **kwargs):
     """
@@ -1618,7 +1618,87 @@ class TestPointOperations(unittest.TestCase):
             self.assertTrue(isclose(p * q, 5 * magic**2))
         
     def test_project(self):
-        pass # TODO
+        """
+        Test the projections to see that they have the expected properties.
+        """
+        import itertools
+        from numpy import array, dot
+        from numpy.linalg import det
+
+        # our little magic constant
+        magic = 0.33377777373737737777
+
+        # test for all kinds of curvatures K
+        for k in (0, 1, -1, 1/11, -1/11, 1 + magic, -1 - magic):
+            
+            s = space(curvature=k)
+
+            # test line preserving projection
+            # 3 points are colinear when
+            # | x1 y1 1 |
+            # | x2 y2 1 | = 0
+            # | x3 y3 1 |
+            # let's test this!
+
+            for p, q in itertools.permutations((
+                (1, 0),
+                (3/5, 4/5),
+                (-5/13, 12/13),
+                (-8/17, -15/17),
+                ), 2):
+                p = s.make_point(p, magic)
+                q = s.make_point(q, magic)
+                u = p.project(projection_types.preserve_lines)
+                v = (p+q).project(projection_types.preserve_lines)
+                w = (p+(-magic)*q).project(projection_types.preserve_lines)
+                d = det([[*u, 1],[*v, 1],[*w, 1]])
+                self.assertTrue(abs(d) < 1e-9)
+
+            # test angle preserving projection
+            # map will be conformal, so we do like a secant test
+
+            delta = 1e-9
+            vi = s.make_point((1, 0, 0), delta)
+            vj = s.make_point((0, 1, 0), delta)
+            vk = s.make_point((0, 0, 1), delta)
+            for p in (
+                (1, 0, 0),
+                (0, 3/5, 4/5),
+                (-5/13, 12/13, 0),
+                (2/11, 6/11, 9/11),
+                (3/7, 6/7, 2/7)
+                ):
+                p = s.make_point(p, magic)
+                pp = p.project(projection_types.preserve_angles)
+                pi, pj, pk = (array((p+v).project(projection_types.preserve_angles)) - pp for v in (vi, vj, vk))
+                # should stay orthogonal and same size
+                # note that we're doing a secant thing so it's only approximate
+                # thus we set a relatively high tolerance
+                self.assertTrue(isclose(
+                    dot(pi, pi),
+                    dot(pj, pj),
+                    rel_tol = 1e-6
+                    ))
+                self.assertTrue(isclose(
+                    dot(pi, pi),
+                    dot(pk, pk),
+                    rel_tol = 1e-6
+                    ))
+                self.assertTrue(isclose(
+                    dot(pi, pj),
+                    0,
+                    abs_tol = 1e-6
+                    ))
+                self.assertTrue(isclose(
+                    dot(pi, pk),
+                    0,
+                    abs_tol = 1e-6
+                    ))
+                self.assertTrue(isclose(
+                    dot(pj, pk),
+                    0,
+                    abs_tol = 1e-6
+                    ))
 
 class TestMPMath(unittest.TestCase):
     """
