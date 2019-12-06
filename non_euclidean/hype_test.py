@@ -19,7 +19,7 @@ from math import isclose, exp, sqrt, hypot, asinh, acosh
 from fractions import Fraction
 
 # the thing we want to test
-from hype import space, space_point, space_point_transform, common_math, to_real, projection_types
+from hype import space, space_point, space_point_transform, common_math, to_real, projection_types, mp_namespace
 
 def point_isclose(a, b, *args, **kwargs):
     """
@@ -1419,7 +1419,8 @@ class TestPointOperations(unittest.TestCase):
 
             rot = space_point_transform(
                 numpy.array([[1,0,0],[0,s2_ref,-s2_ref],[0,s2_ref,s2_ref]]),
-                curvature=k
+                curvature=k,
+                math = common_math
                 )
 
             f, g, i = map(space_point_transform, (p, q, o))
@@ -1493,7 +1494,8 @@ class TestPointOperations(unittest.TestCase):
                     [0, numpy.cos(angle), -numpy.sin(angle)],
                     [0, numpy.sin(angle), numpy.cos(angle)]
                     ]),
-                curvature = -1
+                curvature = -1,
+                math = common_math
                 )
 
         spin_half = rotater(t2_ref)
@@ -1534,6 +1536,12 @@ class TestPointOperations(unittest.TestCase):
         # a bigger loop
 
         t2 = (spin_left + forward + (spin_right + forward) * 3) * 7 + t2
+
+        check_walk_eq(t1, t2)
+
+        # a bigger loop, but in the correct direction
+
+        t2 = t2 + ((forward + spin_right) * 3 + forward + spin_left) * 7
 
         check_walk_eq(t1, t2)
         
@@ -1700,7 +1708,7 @@ class TestPointOperations(unittest.TestCase):
                     abs_tol = 1e-6
                     ))
 
-class TestMPMath(unittest.TestCase):
+class TestµMPMath(unittest.TestCase):
     """
     Another provided math context runs on the mpmath library.
     This collection of test cases ensures that the math
@@ -1711,9 +1719,137 @@ class TestMPMath(unittest.TestCase):
     Presumably if it works in the mpmath context it will work
     in any math context.
     """
-    pass # TODO
+    def test_hyper_3_7(self):
+        """
+        Examine the order-7 triangular tiling, which lives in
+        the hyperbolic plane and has Schlafi symbol {3,7}.
+        Start at any vertex.
+        How many vertices are at minimum distance n from that vertex?
+        The sequence goes like this:
+        1, 7, 21, ...
+        for n >= 2, S[n] =3 S[n-1] - S[n-2]
+        This sequence is given in HyperRogue.
+        Why do we care? Well, think about it, what happens when we try
+        to actually walk out all these points in our model of hyperbolic space?
+        The sequence grows exponentially, and the represented points
+        also use exponentially larger values.
+        Floats lose precision compared to this exponential growth,
+        and eventually, the whole thing collapses.
+        Multiple precision floats let you keep going for a lot longer.
+
+        This test is forced to be one of the last tests because it takes an extremely long time.
+
+        HyperRogue: Playing with Hyperbolic Geometry
+          Kopczyński, Celińska, and Čtrnáct, 2017
+          http://archive.bridgesmathart.org/2017/bridges2017-9.pdf
+          (no DOI)
+        """
+        import numpy
+        import logging
+        
+        # calculate the first some number of terms of the sequence
+        S = [1, 7, 21]
+        while len(S) < 40:
+            S.append(S[-1]*3 - S[-2])
+        # make it cumulative
+        S = numpy.cumsum(S)
+
+        normal_ns = common_math
+        mp_ns = mp_namespace(dps=17, _nonce=[])
+
+        def fails_at(ns, stop_at=None):
+            """
+            Given a certain math namespace,
+            when does it fail?
+            """
+
+            s = space(curvature=-1, math=ns)
+
+            # turning constants in radians
+            t1_ref = ns.tau
+
+            def make_triangle(f, v):
+                f = t1_ref / f
+                v = t1_ref / v / 2
+                a = (ns.cos(f) + 1)/ns.sin(v)**2 - 1
+                a = ns.sqrt(a**2 - 1)
+                b = a / ns.sin(f) * ns.sin(v)
+                a = ns.asinh(a)
+                b = ns.asinh(b)
+                return a, v, b, f, b, v
+
+            # use {3, 7} tiling
+
+            edge, angle, *_ = make_triangle(3, 7)
+            angle *= 2
+
+            def rotater(angle):
+                return space_point_transform(
+                    ns.matrix([
+                        [1, 0, 0],
+                        [0, ns.cos(angle), -ns.sin(angle)],
+                        [0, ns.sin(angle), ns.cos(angle)]
+                        ]),
+                    curvature = -1,
+                    math = ns
+                    )
+
+            spin_half = rotater(t1_ref/2)
+            spin_left = rotater(angle)
+            forward = space_point_transform(s.make_point((1, 0), edge))
+            origin = s.make_origin(2)
+
+            def r_soft_hash(x):
+                """
+                Generates a hashable value that mushes together very close reals.
+                """
+                if abs(x) < 1e-9:return 0
+                # round it to some number of bits
+                b = ns.round(ns.log(abs(x)) / ns.log(2))
+                gran = 2**(b-30)
+                return ns.round(x / gran) * gran
+
+            def soft_hash(p):
+                """
+                Generates a hashable value that mushes together very close points.
+                """
+                return tuple(map(r_soft_hash, p))
+
+            active = [space_point_transform(origin)]
+            seen = {soft_hash(active[0](origin))}
+
+            logging.log(logging.INFO, f'3-7 tiling sequence test with math as {ns}')
+            for i, si in enumerate(S):
+                old_active = active
+                active = []
+                logging.log(logging.INFO, f'Iteration {i}, sequence expecting {si}, got {len(seen)}')
+                if len(seen) != si or stop_at is not None and i >= stop_at:
+                    return i
+                for t in old_active:
+                    t = t + spin_half
+                    for _ in range(7):
+                        t = t + spin_left
+                        tfw = t + forward
+                        sh = soft_hash(tfw(origin))
+                        if sh not in seen:
+                            seen.add(sh)
+                            active.append(tfw)
+
+        self.assertTrue(fails_at(normal_ns, stop_at=8) == 8)
+        
+        self.assertTrue(fails_at(mp_ns, stop_at=8) == 8)
+
+        fail_normal = fails_at(normal_ns)
+
+        self.assertTrue(fail_normal > 10)
+        
+        fail_mp = fails_at(mp_ns, stop_at=fail_normal+1)
+        
+        self.assertTrue(fail_normal < fail_mp)
 
 # run unittest's main
 if __name__ == '__main__':
+    import logging
+    logging.basicConfig(level=logging.INFO)
     unittest.main()
     

@@ -49,7 +49,8 @@ class joined_namespace(object):
             if isinstance(parent, dict):
                 self.__dict__.update(parent)
             else:
-                self.__dict__.update(parent.__dict__)
+                for attr in dir(parent):
+                    self.__dict__[attr] = getattr(parent, attr)
         
 def extend_math_namespace(*inherits):
     """
@@ -58,6 +59,7 @@ def extend_math_namespace(*inherits):
     - tau = 2 pi
     - pi = tau / 2
     - e = exp(1)
+    - round = x -> floor(x + 1/2)
     - eps = a small value
     - exp = x -> e^x
     - sqrt = x -> x^(1/2)
@@ -69,6 +71,9 @@ def extend_math_namespace(*inherits):
     - acos from arccos if available
     - asin_safe = asin but it accepts values just outside of the usual range
     - acos_safe = acos but it accepts values just outside of the usual range
+    - matrix = makes a numpy array by default
+    - matrix_pow = pow for matrices, uses numpy by default
+    - matmul = matrix multiply
     """
     ns = joined_namespace(*inherits)
     if not hasattr(ns, 'tau'):
@@ -77,6 +82,16 @@ def extend_math_namespace(*inherits):
         ns.pi = ns.tau / ns.real(2)
     if not hasattr(ns, 'e'):
         ns.e = ns.exp(ns.real(1))
+    if not hasattr(ns, 'round'):
+        def _round(ns):
+            def i_round(x):
+                """
+                patched math function
+                rounds a number to the nearest integer
+                """
+                return ns.floor(x + ns.real(0.5))
+            return i_round
+        ns.round = _round(ns)
     if not hasattr(ns, 'eps'):
         ns.eps = ns.exp(-32)
     if not hasattr(ns, 'exp'):
@@ -183,6 +198,43 @@ def extend_math_namespace(*inherits):
                 return ns.acos(x)
             return i_acos
         ns.acos_safe = _acos(ns)
+    if not hasattr(ns, 'matrix'):
+        def _matrix(ns):
+            def i_matrix(data):
+                """
+                extra math function to matrix-ify the input
+                constructs a numpy array by default
+                """
+                import numpy
+                return numpy.array(data)
+            return i_matrix
+        ns.matrix = _matrix(ns)
+    if not hasattr(ns, 'matrix_pow'):
+        def _matrix_pow(ns):
+            def i_matrix_pow(m, r):
+                """
+                pow but for matrices
+                uses numpy and scipy by default
+                """
+                if isinstance(r, int):
+                    from numpy.linalg import matrix_power
+                    return matrix_power(m, r)
+                from scipy.linalg import fractional_matrix_power
+                return fractional_matrix_power(m, r)
+            return i_matrix_pow
+        ns.matrix_pow = _matrix_pow(ns)
+    if not hasattr(ns, 'matmul'):
+        def _matmul(ns):
+            def i_matmul(a, b):
+                """
+                mul but for matrices
+                """
+                try:
+                    return a @ b
+                except TypeError:
+                    return a * b
+            return i_matmul
+        ns.matmul = _matmul(ns)
     return ns
 
 common_math = extend_math_namespace(math, {'real': float})
@@ -199,11 +251,12 @@ def mp_namespace(dps=15, _nonce=[]):
     """
     if _nonce:
         return _nonce[0]
-    from mpmath import mp
+    from mpmath import mp, matrix
     mp.dps = 15
     result = extend_math_namespace(mp, {
         'real': mp.mpf,
-        'eps': mp.mpf(10) ** -(dps-3)
+        'eps': mp.mpf(10) ** -(dps-3),
+        'matrix': matrix
         })
     _nonce.append(result)
     return result
@@ -996,7 +1049,7 @@ class space_point_transform(object):
     Represents a transformation function on space points,
     more specifically, a kind of isometry.
     """
-    def __init__(self, data, curvature=None):
+    def __init__(self, data, curvature=None, math=None):
         """
         The usual constructor.
         Feed it a point as data to have it construct the transform
@@ -1005,6 +1058,7 @@ class space_point_transform(object):
         if isinstance(data, space_point):
             # create transformation data
             s = data.home
+            math = s.math
             self.curvature = s.curvature
             if self.curvature == 0:
                 self.add = data[1:]
@@ -1017,42 +1071,44 @@ class space_point_transform(object):
             self.curvature = data.curvature
             self.add = data.add
             self.matrix = data.matrix
+            self.math = data.math
         elif isinstance(data, (tuple, list)):
             # should be an addition vector
             self.add = data
             self.matrix = None
             # we take your curvature
             self.curvature = curvature
-        elif hasattr(data, 'shape'):
+        elif hasattr(data, '__len__'):
             # probably a numpy array or matrix
-            if len(data.shape) == 1:
-                # seems like a vector to be added
-                self.add = data
-                self.matrix = None
-            elif len(data.shape) == 2:
+            try:
+                # access the top left element
+                _ = data[0,0]
                 # seems like a left transform matrix
                 self.add = None
                 self.matrix = data
-            else:
-                raise ValueError('Array-like should be 1D (added vector) or 2D (left transform matrix), but received different shape')
+            except:
+                # seems like a vector to be added
+                self.add = data
+                self.matrix = None
             # we take your curvature
             self.curvature = curvature
         else:
             raise TypeError('Not sure how to construct a transform from that data type')
+        self.math = math
     def __eq__(self, other):
         if self is other:return True
         if not isinstance(other, space_point_transform):return False
-        return self.curvature == other.curvature and self.add == other.add and self.matrix == other.matrix
+        return self.curvature == other.curvature and self.add == other.add and self.matrix == other.matrix and self.math == other.math
     def __ne__(self, other):
         return not self == other
     def __hash__(self):
-        return hash((space_point_transform, self.curvature, self.add, _require_hash(self.matrix)))
+        return hash((space_point_transform, self.curvature, self.add, _require_hash(self.matrix), _require_hash(self.math)))
     def __repr__(self):
         if self.add is not None:
             data = repr(self.add)
         elif self.matrix is not None:
             data = repr(self.matrix)
-        return 'space_point_transform(' + data + ', curvature=' + repr(self.curvature) + ')'
+        return 'space_point_transform(' + data + ', curvature=' + repr(self.curvature) + ', math=' + repr(self.math) + ')'
     def __str__(self):
         if self.add is not None:
             return '(P -> ' + str(self.add) + ' + P)'
@@ -1064,9 +1120,10 @@ class space_point_transform(object):
         Helper method to construct a transformation matrix from a point.
         Please don\'t use this for K = 0 because that would be dumb.
 
-        Requires numpy
+        Requires numpy*
         numpy is an external library, you may need to install it.
         The matrix class used is numpy.array
+        * unless the math context provides a different matrix class
 
         Equations used:
         D = (x0 - 1)/(x1^2 + x2^2 + ... + xk^2)
@@ -1083,8 +1140,6 @@ class space_point_transform(object):
         A possible future improvement would be to find a way to vectorize this matrix,
         taking advantage of numpy's very good constant factor.
         """
-        import numpy
-
         # fetch point info
         s = point.home
         math = s.math
@@ -1093,7 +1148,7 @@ class space_point_transform(object):
         curvature = s.curvature
 
         # initialize matrix to all zeros of the correct type
-        t = numpy.array([[real(0)]*n]*n)
+        t = math.matrix([[real(0)]*n]*n)
 
         # extra constant b = x1^2 + x2^2 + ...
         b = sum(map((lambda x:x*x), point[1:]))
@@ -1101,8 +1156,8 @@ class space_point_transform(object):
         # b = 0 means the point is the origin
         # so let's build the identity matrix
         if b == 0:
-            a = numpy.arange(n)
-            t[a,a] = real(1)
+            for i in range(n):
+                t[i,i] = real(1)
             return t
         
         # extra constant c = -K
@@ -1129,8 +1184,7 @@ class space_point_transform(object):
         Helper method to flatten the matrix type
         into a tuple with a certain type.
         """
-        import numpy
-        return tuple(map(cast, mat.flatten()))
+        return tuple(mat[i,0] for i in range(len(mat)))
     def _make_matrix(self):
         """
         Force self to have a matrix.
@@ -1140,16 +1194,19 @@ class space_point_transform(object):
         """
         if self.matrix is not None:return
         # now we know K =/= 0
-        
-        import numpy
+
+        math = self.math
+        real = math.real
 
         n = len(self.add)
-        # guess the type
-        number_type = type(self.add[0] or 0.0)
 
         # identity matrix with adding column
-        t = numpy.eye(n+1, dtype=number_type)
-        t[1:,0] = self.add
+        t = [[real(0)]*(n+1) for _ in range(n+1)]
+        for i in range(n+1):
+            t[i][i] = real(1)
+        for i in range(n):
+            t[i+1][0] = self.add[i]
+        t = math.matrix(t)
 
         self.matrix = t
     def __call__(self, data):
@@ -1174,11 +1231,13 @@ class space_point_transform(object):
                     (data[0],) + tuple(map(sum, zip(self.add, data[1:])))
                     )
             if self.matrix is not None:
-                if self.matrix.shape[0] != len(data):
+                if len(self.matrix) != len(data):
                     raise ValueError('Dimensionality does not match')
+                math = self.math or data.math
+                matrified = math.matrix([[dv] for dv in data])
                 return space_point(
                     data.home,
-                    space_point_transform._flatten_matrix(self.matrix @ data, data.home.math.real)
+                    space_point_transform._flatten_matrix(math.matmul(self.matrix, matrified), data.home.math.real)
                     )
         elif isinstance(data, space_point_transform):
             if self.curvature != data.curvature:
@@ -1191,18 +1250,20 @@ class space_point_transform(object):
                         raise ValueError('Dimensionality does not match')
                     return space_point_transform(
                         tuple(map(sum, zip(self.add, data.add))),
-                        curvature = self.curvature
+                        curvature = self.curvature,
+                        math = self.math or data.math
                         )
             if self.matrix is not None:
                 if data.matrix is None:
                     data._make_matrix()
-                if self.matrix.shape != data.matrix.shape:
-                    raise ValueError('Dimensionality does not match')
+                math = self.math or data.math
                 return space_point_transform(
-                    self.matrix @ data.matrix,
-                    curvature = self.curvature
+                    math.matmul(self.matrix, data.matrix),
+                    curvature = self.curvature,
+                    math = self.math or data.math
                     )
         else:
+            print(type(other))
             raise TypeError('Can only apply this transform to a point (moves the point) or a transform (concatenates the transforms), but received some other type')
     def __add__(self, other):
         """
@@ -1228,7 +1289,7 @@ class space_point_transform(object):
         You may need to install scipy separately.
         """
         import numbers
-
+        
         if not isinstance(other, numbers.Real):
             raise TypeError('For transforms, this operation (*) is not defined for non-real argument')
 
@@ -1240,22 +1301,16 @@ class space_point_transform(object):
 
             return space_point_transform(
                 tuple(map(scale_func, self.add)),
-                self.curvature
+                curvature = self.curvature,
+                math = self.math
                 )
 
-        if isinstance(other, int):
-            from numpy.linalg import matrix_power
-            
-            return space_point_transform(
-                matrix_power(self.matrix, other),
-                curvature = self.curvature
-                )
-
-        from scipy.linalg import fractional_matrix_power
+        math = self.math
 
         return space_point_transform(
-            fractional_matrix_power(self.matrix, other),
-            curvature = self.curvature
+            math.matrix_pow(self.matrix, other),
+            curvature = self.curvature,
+            math = self.math
             )
     def __rmul__(self, other):
         """
