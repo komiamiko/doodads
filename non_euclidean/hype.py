@@ -13,8 +13,10 @@ If you find a math error, do report it!
 
 import math
 import functools
+import itertools
 import operator
 import enum
+import collections.abc
 
 def _require_hash(value):
     """
@@ -49,7 +51,8 @@ class joined_namespace(object):
             if isinstance(parent, dict):
                 self.__dict__.update(parent)
             else:
-                self.__dict__.update(parent.__dict__)
+                for attr in dir(parent):
+                    self.__dict__[attr] = getattr(parent, attr)
         
 def extend_math_namespace(*inherits):
     """
@@ -58,12 +61,21 @@ def extend_math_namespace(*inherits):
     - tau = 2 pi
     - pi = tau / 2
     - e = exp(1)
+    - round = x -> floor(x + 1/2)
+    - eps = a small value
     - exp = x -> e^x
     - sqrt = x -> x^(1/2)
     - cbrt = x -> x^(1/3)
     - hypot = (x,y) -> sqrt(x^2 + y^2)
     - asinh = x -> log(x + sqrt(x^2 + 1))
     - acosh = x -> log(x + sqrt(x^2 - 1))
+    - asin from arcsin if available
+    - acos from arccos if available
+    - asin_safe = asin but it accepts values just outside of the usual range
+    - acos_safe = acos but it accepts values just outside of the usual range
+    - matrix = makes a numpy array by default
+    - matrix_pow = pow for matrices, uses numpy by default
+    - matmul = matrix multiply
     """
     ns = joined_namespace(*inherits)
     if not hasattr(ns, 'tau'):
@@ -72,11 +84,23 @@ def extend_math_namespace(*inherits):
         ns.pi = ns.tau / ns.real(2)
     if not hasattr(ns, 'e'):
         ns.e = ns.exp(ns.real(1))
+    if not hasattr(ns, 'round'):
+        def _round(ns):
+            def i_round(x):
+                """
+                patched math function
+                rounds a number to the nearest integer
+                """
+                return ns.floor(x + ns.real(0.5))
+            return i_round
+        ns.round = _round(ns)
+    if not hasattr(ns, 'eps'):
+        ns.eps = ns.exp(-32)
     if not hasattr(ns, 'exp'):
         ns.exp = functools.partial(operator.pow, ns.e)
     if not hasattr(ns, 'sqrt'):
         def _sqrt(ns):
-            def i_sqrt(x, y):
+            def i_sqrt(x):
                 """
                 patched math function
                 see docs for math.sqrt
@@ -86,12 +110,17 @@ def extend_math_namespace(*inherits):
         ns.sqrt = _sqrt(ns)
     if not hasattr(ns, 'cbrt'):
         def _cbrt(ns):
-            def i_cbrt(x, y):
+            def i_cbrt(x):
                 """
                 patched math function
                 see docs for math.cbrt
                 """
-                return x ** (ns.real(1) / ns.real(3))
+                invert = x < 0
+                x = abs(x)
+                result = x ** (ns.real(1) / ns.real(3))
+                if invert:
+                    result = -result
+                return result
             return i_cbrt
         ns.cbrt = _cbrt(ns)
     if not hasattr(ns, 'hypot'):
@@ -120,25 +149,117 @@ def extend_math_namespace(*inherits):
                 """
                 patched math function
                 see docs for math.acosh
+                can take some values just outside of the range [1, inf]
                 """
+                if ns.real(1) - ns.eps <= x <= ns.real(1):return ns.real(0)
                 return ns.log(x + ns.sqrt(x*x - ns.real(1)))
             return i_acosh
-        ns.asinh = _acosh(ns)
+        ns.acosh = _acosh(ns)
+    if not hasattr(ns, 're'):
+        def _re(ns):
+            def i_re(z):
+                """
+                The Re function that extracts the real component of a complex number.
+                """
+                try:
+                    return ns.real(z)
+                except:
+                    pass
+                if hasattr(z, 'real'):
+                    return z.real
+                raise TypeError('Don\'t know how to get the real component of that')
+            return i_re
+        ns.re = _re(ns)
+    if not hasattr(ns, 'asin') and hasattr(ns, 'arcsin'):
+        ns.asin = ns.arcsin
+    if not hasattr(ns, 'acos') and hasattr(ns, 'arccos'):
+        ns.acos = ns.arccos
+    if not hasattr(ns, 'asin_safe'):
+        def _asin(ns):
+            def i_asin(x):
+                """
+                patched math function
+                see docs for math.asin
+                can take some values just outside of the range [-1, 1]
+                """
+                if ns.real(1) <= x <= ns.real(1) + ns.eps:return ns.tau / ns.real(4)
+                if -ns.real(1) >= x >= -ns.real(1) - ns.eps:return -ns.tau / ns.real(4)
+                return ns.asin(x)
+            return i_asin
+        ns.asin_safe = _asin(ns)
+    if not hasattr(ns, 'acos_safe'):
+        def _acos(ns):
+            def i_acos(x):
+                """
+                patched math function
+                see docs for math.acos
+                can take some values just outside of the range [-1, 1]
+                """
+                if ns.real(1) <= x <= ns.real(1) + ns.eps:return 0
+                if -ns.real(1) >= x >= -ns.real(1) - ns.eps:return ns.pi
+                return ns.acos(x)
+            return i_acos
+        ns.acos_safe = _acos(ns)
+    if not hasattr(ns, 'matrix'):
+        def _matrix(ns):
+            def i_matrix(data):
+                """
+                extra math function to matrix-ify the input
+                constructs a numpy array by default
+                """
+                import numpy
+                return numpy.array(data)
+            return i_matrix
+        ns.matrix = _matrix(ns)
+    if not hasattr(ns, 'matrix_pow'):
+        def _matrix_pow(ns):
+            def i_matrix_pow(m, r):
+                """
+                pow but for matrices
+                uses numpy and scipy by default
+                """
+                if isinstance(r, int):
+                    from numpy.linalg import matrix_power
+                    return matrix_power(m, r)
+                from scipy.linalg import fractional_matrix_power
+                return fractional_matrix_power(m, r)
+            return i_matrix_pow
+        ns.matrix_pow = _matrix_pow(ns)
+    if not hasattr(ns, 'matmul'):
+        def _matmul(ns):
+            def i_matmul(a, b):
+                """
+                mul but for matrices
+                """
+                try:
+                    return a @ b
+                except TypeError:
+                    return a * b
+            return i_matmul
+        ns.matmul = _matmul(ns)
     return ns
 
 common_math = extend_math_namespace(math, {'real': float})
 
-def mp_namespace(_nonce=[]):
+def mp_namespace(dps=15, _nonce=[]):
     """
     Returns a namespace using mpmath's multiple precision real numbers
     instead of the built-in floats.
     Will return an identical object in future calls.
     Warning: imports mpmath. You will need mpmath.
+
+    Setting dps through this method will allow for calculating an appropriate
+    epsilon value.
     """
     if _nonce:
         return _nonce[0]
-    from mpmath import mp
-    result = extend_math_namespace(mp, {'real': mp.mpf})
+    from mpmath import mp, matrix
+    mp.dps = 15
+    result = extend_math_namespace(mp, {
+        'real': mp.mpf,
+        'eps': mp.mpf(10) ** -(dps-3),
+        'matrix': matrix
+        })
     _nonce.append(result)
     return result
 
@@ -191,6 +312,12 @@ class abc_space(object):
         Satisfies:
         cos(0) = 1
         d/dx cos(x) = -K sin(x)
+
+        Examples:
+        K =  0 --> cos(x) = 1
+        K =  1 --> cos(x) = cos*(x)
+        K = -1 --> cos(x) = cosh(x)
+        *regular trig function, not our special one
         """
         raise NotImplementedError
     def sin(self, x):
@@ -200,6 +327,12 @@ class abc_space(object):
         Satisfies:
         sin(0) = 0
         d/dx sin(x) = cos(x)
+
+        Examples:
+        K =  0 --> sin(x) = x
+        K =  1 --> sin(x) = sin*(x)
+        K = -1 --> sin(x) = sinh(x)
+        *regular trig function, not our special one
         """
         raise NotImplementedError
     def acos(self, x):
@@ -233,12 +366,16 @@ class abc_space(object):
         Call with normalize if you are not sure
         if the direction vector is a unit vector.
         """
+        # dumb edge case: 0-dimensional space
+        if len(direction) == 0:
+            return self.make_origin(0)
+        
         math = self.math
         real = math.real
         preal = functools.partial(to_real, real)
         direction = tuple(map(preal, direction))
         if normalize:
-            divide_by = functools.reduce(math.hypot, direction)
+            divide_by = abs(functools.reduce(math.hypot, direction)) or real(1)
             direction = tuple(map((lambda x: x / divide_by), direction))
         magnitude = preal(magnitude)
         cm = self.cos(magnitude)
@@ -267,9 +404,10 @@ class abc_space(object):
         Does not check for whether that point object actually belongs to this space.
         """
         math = self.math
+        real = math.real
         if use_quick:
             return self.acos(point[0])
-        return self.asin(functools.reduce(math.hypot, point[1:]))
+        return self.asin(abs(functools.reduce(math.hypot, point[1:], real(0))))
     def parallel_transport(self, dest, ref):
         """
         What point do we get when parallel transporting
@@ -277,12 +415,8 @@ class abc_space(object):
         For K = 0, this is just vector addition, and the order does not matter.
         For other K, however, this operation is in general not commutative.
         """
-        # TODO implement parallel transport!
-        # I know a cheesy way to do it for dimension N <= 2
-        # but I want to have it implemented more generally
-        # and I heard it's harder for N >= 3
-        # that won't stop me from finding out how!
-        raise NotImplementedError
+        
+        return space_point_transform(dest)(ref)
     def hypot(self, x, y):
         """
         If x and y are lengths of the legs of a right triangle,
@@ -319,8 +453,14 @@ class abc_space(object):
         return self.acos(self.cos(z) / self.cos(x))
     def sphere_s1(self, r):
         """
-        Mass of the 1D boundary of the 2-sphere.
+        Mass (measure) of the 1D boundary of the 2-sphere.
         Commonly called the circumference of a circle.
+
+        Equation is:
+        m = tau sin(r)
+        m is the mass (measure)
+        tau = 2pi is the number of radians in a full turn
+        sin is this space's sin function
 
         To be pedantic, mathematicians call the inside a "ball"
         and the boundary a "sphere" but most people don't care
@@ -341,8 +481,14 @@ class abc_space(object):
         return self.asin(m / math.tau)
     def sphere_v2(self, r):
         """
-        Mass of the 2D interior of the 2-sphere.
+        Mass (measure) of the 2D interior of the 2-sphere.
         Commonly called the area of a circle.
+
+        Equation is:
+        m = 2tau sin(r/2)^2
+        m is the mass (measure)
+        tau = 2pi is the number of radians in a full turn
+        sin is this space's sin function
 
         To be pedantic, mathematicians call the inside a "ball"
         and the boundary a "sphere" but most people don't care
@@ -363,8 +509,14 @@ class abc_space(object):
         return self.asin(math.sqrt(m / (math.tau * real(2)))) * real(2)
     def sphere_s2(self, r):
         """
-        Mass of the 2D boundary of the 3-sphere.
+        Mass (measure) of the 2D boundary of the 3-sphere.
         Commonly called the surface area of a sphere.
+
+        Equation is:
+        m = 2tau sin(r)^2
+        m is the mass (measure)
+        tau = 2pi is the number of radians in a full turn
+        sin is this space's sin function
 
         To be pedantic, mathematicians call the inside a "ball"
         and the boundary a "sphere" but most people don't care
@@ -385,8 +537,15 @@ class abc_space(object):
         return self.asin(math.sqrt(m / (math.tau * real(2))))
     def sphere_v3(self, r):
         """
-        Mass of the 3D interior of the 3-sphere.
+        Mass (measure) of the 3D interior of the 3-sphere.
         Commonly called the volume of a sphere
+
+        Equation is:
+        m = tau/K * (r - sin(2r)/2)
+        m is the mass (measure)
+        tau = 2pi is the number of radians in a full turn
+        K is the curvature of the space
+        sin is this space's sin function
 
         To be pedantic, mathematicians call the inside a "ball"
         and the boundary a "sphere" but most people don't care
@@ -398,12 +557,30 @@ class abc_space(object):
         math = self.math
         real = math.real
         r = to_real(real, r)
-        return math.tau / to_real(real, self.curvature) * (r - self.sin(r * real(2)) / real(2))
+        return math.tau / real(self.curvature) * (r - self.sin(r * real(2)) / real(2))
     def inv_sphere_v3(self, m):
         """
         Inverts sphere_v3
-        Note: this is difficult in general, because it can't be
-        expressed in terms of common functions
+
+        IMPORTANT WARNING
+        This function, in general, cannot be expressed in terms of common functions.
+        We fallback to using a root finding method provided by scipy.
+        scipy is an external library you would need to install.
+        This root finder may not work in other math contexts.
+        """
+        from scipy.optimize import root_scalar
+        math = self.math
+        real = math.real
+        m = to_real(real, m)
+        lower, est, upper = self._estimate_inv_sphere_v3(m)
+        def objective(r):
+            return self.sphere_v3(r) - m
+        result = root_scalar(objective, bracket = (lower, upper), x0 = est)
+        return result.root
+    def _estimate_inv_sphere_v3(self, m):
+        """
+        Used by root finding methods in inv_sphere_v3
+        Returns (lower bound, estimate, upper bound)
         """
         raise NotImplementedError
     def circle_circumference(self, r):
@@ -456,7 +633,7 @@ class abc_space(object):
         C = to_real(real, C)
         return self.acos(
             self.cos(a) * self.cos(b) +
-            self.sin(a) * self.sin(b) * math.cos(C) * self.curvature
+            self.sin(a) * self.sin(b) * math.cos(C) * real(self.curvature)
             )
     def cosine_law_angle(self, a, b, c):
         """
@@ -486,9 +663,9 @@ class abc_space(object):
         a = to_real(real, a)
         b = to_real(real, b)
         c = to_real(real, c)
-        return math.acos(
+        return math.acos_safe(
             (self.cos(c) - self.cos(a) * self.cos(b)) /
-            (self.sin(a) * self.sin(b) * self.curvature)
+            (self.sin(a) * self.sin(b) * real(self.curvature))
             )
     def dual_cosine_law_angle(self, A, B, c):
         """
@@ -517,7 +694,7 @@ class abc_space(object):
         A = to_real(real, A)
         B = to_real(real, B)
         c = to_real(real, c)
-        return math.acos(
+        return math.acos_safe(
             -math.cos(A)*math.cos(B) +
             math.sin(A)*math.sin(B)*self.cos(c)
             )
@@ -578,7 +755,7 @@ class abc_space(object):
         a = to_real(real, a)
         A = to_real(real, A)
         B = to_real(real, B)
-        return self.asin(self.sin(a) / math.sin(a) * math.sin(b))
+        return self.asin(self.sin(a) / math.sin(A) * math.sin(B))
     def sine_law_angle(self, a, A, b):
         """
         A triangle looks like this:
@@ -605,7 +782,56 @@ class abc_space(object):
         a = to_real(real, a)
         A = to_real(real, A)
         b = to_real(real, b)
-        return math.asin(math.sin(A) / self.sin(a) * self.sin(b))
+        return math.asin_safe(math.sin(A) / self.sin(a) * self.sin(b))
+    def triangle_area_from_angles(self, A, B, C):
+        """
+        Computes the area of a triangle, given its angles.
+
+        For K = 0, does not work.
+        For other K, uses the Gauss-Bonnet formula:
+          m = 1/K * (A + B + C - pi)
+          pi = tau/2 is the number of radians in a half turn
+
+        This method can handle triangles with infinite side lengths,
+        as it never needs the side lengths.
+        """
+        if self.curvature == 0:
+            raise TypeError('3 angles do not uniquely define a triangle for K = 0')
+        math = self.math
+        real = math.real
+        A = to_real(real, A)
+        B = to_real(real, B)
+        C = to_real(real, C)
+        # Gauss-Bonnet formula
+        return (A + B + C - math.pi) / self.curvature
+    def triangle_area_from_sides(self, a, b, c):
+        """
+        Computes the area of a triangle, given its side lengths.
+
+        For K = 0, uses Heron's formula:
+          s = (a+b+c)/2
+          m^2 = s(s-a)(s-b)(s-c)
+        For other K, solves the triangle using the cosine law,
+        and calls the other method
+        triangle_area_from_angles
+
+        Note that this method breaks down for infinite triangles.
+        """
+        math = self.math
+        real = math.real
+        a = to_real(real, a)
+        b = to_real(real, b)
+        c = to_real(real, c)
+        if self.curvature == 0:
+            # Heron's formula
+            s = (a+b+c)/2
+            return math.sqrt(s*(s-a)*(s-b)*(s-c))
+        else:
+            # solve the triangle and redirect
+            A = self.cosine_law_angle(b, c, a)
+            B = self.cosine_law_angle(c, a, b)
+            C = self.cosine_law_angle(a, b, c)
+            return self.triangle_area_from_angles(A, B, C)
     def distance_between(self, p, q):
         """
         Computes the distance between 2 points in this space,
@@ -613,10 +839,7 @@ class abc_space(object):
         
         Distance is calculated based on the following equations:
 
-        k = K^2
-          because we chose to use negative K instead of imaginary,
-          this looks like K |K| instead
-        x^2 = 1/k (p0 - q0)^2 + (p1 - q1)^2 + (p2 - q2)^2 + (p3 - q3)^2 + ...
+        x^2 = 1/K (p0 - q0)^2 + (p1 - q1)^2 + (p2 - q2)^2 + (p3 - q3)^2 + ...
         x is an intermediate value representing the model distance
 
         d = 2 asin(x/2)
@@ -629,12 +852,51 @@ class abc_space(object):
         n = len(p)
         if len(q) != n:
             raise ValueError('Mismatched dimensions in points')
-        curvature_k = real(self.curvature)
-        curvature_k = curvature_k * abs(curvature_k)
-        x = (p[0] - q[0])**2 / curvature_k + sum(
+        x = (p[0] - q[0])**2 / real(self.curvature) + sum(
             map((lambda tup:(tup[0] - tup[1])**2), zip(p[1:], q[1:])),
             real(0))
         return real(2) * self.asin(math.sqrt(x) / real(2))
+    def dot_product(self, p, q):
+        """
+        Computes the dot product for points p, q as vectors from the origin
+        Dot product · has the following properties:
+        - p·q is bilinear (linear in both p and q)
+        - p·q = q·p
+        - p·p = |p|^2
+        - cos(θ) = p·q/(|p| |q|)
+
+        There really isn't a fancy formula for this.
+        We just get the usual magnitudes and combine that with
+        the Euclidean dot product formula.
+        """
+        math = self.math
+        square = lambda x:x*x
+        pm2 = sum(map(square, p[1:]))
+        qm2 = sum(map(square, q[1:]))
+        pm = math.sqrt(pm2)
+        qm = math.sqrt(qm2)
+        dot = sum(itertools.starmap(operator.mul, zip(p[1:], q[1:])))
+        if pm != 0:
+            dot *= self.asin(pm) / pm
+        if qm != 0:
+            dot *= self.asin(qm) / qm
+        return dot
+    def angle_between(self, p, q):
+        """
+        Get the angle between points.
+        Does part of the computation for the dot product,
+        but only the work needed to get the angle.
+        Special case: if either point is the origin, returns 0.
+        """
+        math = self.math
+        square = lambda x:x*x
+        pm2 = sum(map(square, p[1:]))
+        qm2 = sum(map(square, q[1:]))
+        pm = math.sqrt(pm2)
+        qm = math.sqrt(qm2)
+        if pm == 0 or qm == 0:return math.real(0)
+        dot = sum(itertools.starmap(operator.mul, zip(p[1:], q[1:])))
+        return math.acos(dot / (pm * qm))
 
 class _projection_types(enum.Enum):
     drop_extra_axis = 1
@@ -654,7 +916,7 @@ projection_types.join({
     'beltrami_klein': projection_types.preserve_lines
     })
 
-class space_point(object):
+class space_point(collections.abc.Sequence):
     """
     Represents a point in a space of constant curvature.
     By convention, an extra dimension is added to make math easier (see: projected coordinates),
@@ -700,6 +962,8 @@ class space_point(object):
         return self.x[index]
     def __setitem__(self, index, value):
         self.x[index] = value
+    def __len__(self):
+        return len(self.x)
     def __abs__(self):
         return self.home.magnitude_of(self)
     def __add__(self, other):
@@ -713,6 +977,34 @@ class space_point(object):
             )
     def __sub__(self, other):
         return self.home.distance_between(self, other)
+    def __mul__(self, other):
+        """
+        For scalar other thing:
+        Scale the point as a vector, by a scalar factor.
+
+        For point other thing:
+        Compute the metric tensor (dot product) value.
+        See method space.metric for more information.
+        """
+        if isinstance(other, space_point):
+            return self.home.dot_product(self, other)
+        
+        home = self.home
+        math = home.math
+        real = math.real
+
+        magnitude = abs(self) * other
+        if magnitude == 0:
+            return home.make_origin(len(self) - 1)
+
+        direction = self[1:]
+        return home.make_point(direction, magnitude, normalize=True)
+    def __rmul__(self, other):
+        """
+        All multiplication operations are commutative,
+        so we just redirect to the regular __mul__
+        """
+        return self * other
     def project(self, projection_type):
         """
         Project this point to the regular boring Euclidean plane
@@ -724,9 +1016,10 @@ class space_point(object):
         Corresponds to
         the elliptic orthographic projection and
         the hyperbolic Gans projection.
+        Also the same as projecting from the point (-inf, 0, 0, 0, ...) to the plane x0 = 1
 
         projection_type = projection_types.preserve_angles
-        Projects from the point (-1, 0, 0, 0, ...)
+        Projects from the point (-1, 0, 0, 0, ...) to the plane x0 = 1
         Angles are preserved - a corner with a certain angle will be mapped
         to a corner with the same angle, etc.
         Corresponds to
@@ -734,7 +1027,7 @@ class space_point(object):
         the hyperbolic Poincaré projection.
 
         projection_type = projection_types.preserve_lines
-        Projects from the origin.
+        Projects from the origin to the plane x0 = 1
         Straightness is preserved - a line (geodesic) will be mapped to a line,
         a polygon to a polygon, etc.
         Corresponds to
@@ -746,12 +1039,287 @@ class space_point(object):
         if projection_type == projection_types.drop_extra_axis:
             return tuple(self.x[1:])
         if projection_type == projection_types.preserve_angles:
-            ex = self.x[0]
-            return tuple(map((lambda x: x / ex), self.x[1:]))
-        if projection_type == projection_types.preserve_lines:
             ex = self.x[0] + self.home.math.real(1)
             return tuple(map((lambda x: x / ex), self.x[1:]))
+        if projection_type == projection_types.preserve_lines:
+            ex = self.x[0]
+            return tuple(map((lambda x: x / ex), self.x[1:]))
         raise ValueError('Projection type unknown')
+
+class space_point_transform(object):
+    """
+    Represents a transformation function on space points,
+    more specifically, a kind of isometry.
+    """
+    def __init__(self, data, curvature=None, math=None):
+        """
+        The usual constructor.
+        Feed it a point as data to have it construct the transform
+        as parallel transpart from the origin to that point.
+        """
+        if isinstance(data, space_point):
+            # create transformation data
+            s = data.home
+            math = s.math
+            self.curvature = s.curvature
+            if self.curvature == 0:
+                self.add = data[1:]
+                self.matrix = None
+            else:
+                self.add = None
+                self.matrix = space_point_transform._as_matrix(data)
+        elif isinstance(data, space_point_transform):
+            # shallow copy
+            self.curvature = data.curvature
+            self.add = data.add
+            self.matrix = data.matrix
+            self.math = data.math
+        elif isinstance(data, (tuple, list)):
+            # should be an addition vector
+            self.add = data
+            self.matrix = None
+            # we take your curvature
+            self.curvature = curvature
+        elif hasattr(data, '__len__'):
+            # probably a numpy array or matrix
+            try:
+                # access the top left element
+                _ = data[0,0]
+                # seems like a left transform matrix
+                self.add = None
+                self.matrix = data
+            except:
+                # seems like a vector to be added
+                self.add = data
+                self.matrix = None
+            # we take your curvature
+            self.curvature = curvature
+        else:
+            raise TypeError('Not sure how to construct a transform from that data type')
+        self.math = math
+    def __eq__(self, other):
+        if self is other:return True
+        if not isinstance(other, space_point_transform):return False
+        return self.curvature == other.curvature and self.add == other.add and self.matrix == other.matrix and self.math == other.math
+    def __ne__(self, other):
+        return not self == other
+    def __hash__(self):
+        return hash((space_point_transform, self.curvature, self.add, _require_hash(self.matrix), _require_hash(self.math)))
+    def __repr__(self):
+        if self.add is not None:
+            data = repr(self.add)
+        elif self.matrix is not None:
+            data = repr(self.matrix)
+        return 'space_point_transform(' + data + ', curvature=' + repr(self.curvature) + ', math=' + repr(self.math) + ')'
+    def __str__(self):
+        if self.add is not None:
+            return '(P -> ' + str(self.add) + ' + P)'
+        elif self.matrix is not None:
+            return str(self.matrix)
+    @staticmethod
+    def _as_matrix(point):
+        """
+        Helper method to construct a transformation matrix from a point.
+        Please don\'t use this for K = 0 because that would be dumb.
+
+        Requires numpy*
+        numpy is an external library, you may need to install it.
+        The matrix class used is numpy.array
+        * unless the math context provides a different matrix class
+
+        Equations used:
+        D = (x0 - 1)/(x1^2 + x2^2 + ... + xk^2)
+        it's just an intermediate constant, it doesn't really mean anything
+        T[0,0] = x0
+        T[0,i] = -K xi       |  i =/= 0
+        T[i,0] = xi          |  i =/= 0
+        T[i,i] = 1 + xi^2 D  |
+        T[i,j] = xi xj D     |  i =/= j,  i,j =/= 0
+        These rules fully describe a direct way to compute every element of the matrix.
+
+        The current implementation is not vectorized,
+        so it might seem a little slow for very high dimensions.
+        A possible future improvement would be to find a way to vectorize this matrix,
+        taking advantage of numpy's very good constant factor.
+        """
+        # fetch point info
+        s = point.home
+        math = s.math
+        real = math.real
+        n = len(point)
+        curvature = s.curvature
+
+        # initialize matrix to all zeros of the correct type
+        t = math.matrix([[real(0)]*n]*n)
+
+        # extra constant b = x1^2 + x2^2 + ...
+        b = sum(map((lambda x:x*x), point[1:]))
+
+        # b = 0 means the point is the origin
+        # so let's build the identity matrix
+        if b == 0:
+            for i in range(n):
+                t[i,i] = real(1)
+            return t
+        
+        # extra constant c = -K
+        c = -curvature
+        # apply the rules for d
+        d = (point[0] - 1)/b
+        # apply the rules for t
+        t[0,0] = point[0]
+        for i in range(1, n):
+            xi = point[i]
+            t[0,i] = xi * c
+            t[i,0] = xi
+            xid = xi * d
+            t[i,i] = 1 + xid * xi
+            for j in range(i+1, n):
+                xj = point[j]
+                t[i,j] = t[j,i] = xid * xj
+
+        # it's done!
+        return t
+    @staticmethod
+    def _flatten_matrix(mat, cast):
+        """
+        Helper method to flatten the matrix type
+        into a tuple with a certain type.
+        """
+        return tuple(mat[i,0] for i in range(len(mat)))
+    def _make_matrix(self):
+        """
+        Force self to have a matrix.
+
+        Will only have an interesting effect for K = 0,
+        because otherwise we always use a matrix anyway.
+        """
+        if self.matrix is not None:return
+        # now we know K =/= 0
+
+        math = self.math
+        real = math.real
+
+        n = len(self.add)
+
+        # identity matrix with adding column
+        t = [[real(0)]*(n+1) for _ in range(n+1)]
+        for i in range(n+1):
+            t[i][i] = real(1)
+        for i in range(n):
+            t[i+1][0] = self.add[i]
+        t = math.matrix(t)
+
+        self.matrix = t
+    def __call__(self, data):
+        """
+        Either concatenate (compose) this transformation object with another
+        or apply it to a point.
+
+        When concatenating transforms,
+        since we use the left transform convention,
+        (f g) x = f (g x)
+        so the new transform will apply the other one first
+        and then this one.
+        """
+        if isinstance(data, space_point):
+            if self.curvature != data.home.curvature:
+                raise ValueError('Curvatures do not match')
+            if self.add is not None:
+                if len(self.add) != len(data) - 1:
+                    raise ValueError('Dimensionality does not match')
+                return space_point(
+                    data.home,
+                    (data[0],) + tuple(map(sum, zip(self.add, data[1:])))
+                    )
+            if self.matrix is not None:
+                if len(self.matrix) != len(data):
+                    raise ValueError('Dimensionality does not match')
+                math = self.math or data.math
+                matrified = math.matrix([[dv] for dv in data])
+                return space_point(
+                    data.home,
+                    space_point_transform._flatten_matrix(math.matmul(self.matrix, matrified), data.home.math.real)
+                    )
+        elif isinstance(data, space_point_transform):
+            if self.curvature != data.curvature:
+                raise ValueError('Curvatures do not match')
+            if self.add is not None:
+                if data.add is None:
+                    self._make_matrix()
+                else:
+                    if len(self.add) != len(data.add):
+                        raise ValueError('Dimensionality does not match')
+                    return space_point_transform(
+                        tuple(map(sum, zip(self.add, data.add))),
+                        curvature = self.curvature,
+                        math = self.math or data.math
+                        )
+            if self.matrix is not None:
+                if data.matrix is None:
+                    data._make_matrix()
+                math = self.math or data.math
+                return space_point_transform(
+                    math.matmul(self.matrix, data.matrix),
+                    curvature = self.curvature,
+                    math = self.math or data.math
+                    )
+        else:
+            print(type(other))
+            raise TypeError('Can only apply this transform to a point (moves the point) or a transform (concatenates the transforms), but received some other type')
+    def __add__(self, other):
+        """
+        For convenience, you are also allowed to write
+        concatenation (composition)/application as an addition.
+
+        When concatenating transforms,
+        since we use the left transform convention,
+        (f g) x = f (g x)
+        so the new transform will apply the other one first
+        and then this one.
+        """
+        return self(other)
+    def __mul__(self, other):
+        """
+        Computes the iterated transform for this transform object.
+        Looks like a scalar power but implemented with the multiply operator.
+
+        Uses numpy.linalg for computation of integer matrix powers.
+        You should already have numpy if you got this far, so that's okay.
+
+        For fractional matrix powers, requires scipy.
+        You may need to install scipy separately.
+        """
+        import numbers
+        
+        if not isinstance(other, numbers.Real):
+            raise TypeError('For transforms, this operation (*) is not defined for non-real argument')
+
+        if other == 1:
+            return self
+
+        if self.add is not None:
+            scale_func = functools.partial(operator.mul, other)
+
+            return space_point_transform(
+                tuple(map(scale_func, self.add)),
+                curvature = self.curvature,
+                math = self.math
+                )
+
+        math = self.math
+
+        return space_point_transform(
+            math.matrix_pow(self.matrix, other),
+            curvature = self.curvature,
+            math = self.math
+            )
+    def __rmul__(self, other):
+        """
+        Redirects to the regular __mul__ since
+        all our defined operations are commutative.
+        """
+        return self * other
 
 class euclidean_space(abc_space):
     """
@@ -872,7 +1440,7 @@ class euclidean_space(abc_space):
         a = to_real(real, a)
         b = to_real(real, b)
         C = to_real(real, C)
-        return self.sqrt(a*a + b*b - a*b*real(2)*math.cos(C))
+        return math.sqrt(a*a + b*b - a*b*real(2)*math.cos(C))
     def cosine_law_angle(self, a, b, c):
         """
         A triangle looks like this:
@@ -900,7 +1468,7 @@ class euclidean_space(abc_space):
         a = to_real(real, a)
         b = to_real(real, b)
         c = to_real(real, c)
-        return math.acos((a*a + b*b - c*c)/(a*b*real(2)))
+        return math.acos_safe((a*a + b*b - c*c)/(a*b*real(2)))
     def dual_cosine_law_angle(self, A, B, c):
         """
         A triangle looks like this:
@@ -964,13 +1532,10 @@ class euclidean_space(abc_space):
         For K = 0, this is just the magnitude of the vector difference.
         """
         math = self.math
-        return functools.reduce(
-            math.hypot,
-            map(
+        return math.sqrt(sum(map(
                 (lambda tup:(tup[0] - tup[1])**2),
                 zip(p[1:], q[1:])
-                )
-            )
+                )))
 
 class elliptic_space(abc_space):
     """
@@ -1011,7 +1576,7 @@ class elliptic_space(abc_space):
         math = self.math
         real = math.real
         x = to_real(real, x)
-        return math.acos(x)
+        return math.acos_safe(x)
     def asin(self, x):
         """
         The inverse sine function.
@@ -1019,7 +1584,7 @@ class elliptic_space(abc_space):
         math = self.math
         real = math.real
         x = to_real(real, x)
-        return math.asin(x)
+        return math.asin_safe(x)
     def distance_between(self, p, q):
         """
         Computes the distance between 2 points in this space,
@@ -1035,6 +1600,24 @@ class elliptic_space(abc_space):
         """
         dist = abc_space.distance_between(self, p, q)
         return min(dist, self.math.pi * self.scale - dist)
+    def _estimate_inv_sphere_v3(self, m):
+        math = self.math
+        real = math.real
+        m /= self.scale**3
+        if m > real(6):
+            est = m / math.tau
+            gap = math.tau / real(12)
+            lower = max(est - gap, real(0))
+            upper = est + gap
+        else:
+            est = math.cbrt(m * real(3) / (math.tau * real(2)))
+            gap = math.tau / real(12)
+            lower = est
+            upper = est + gap
+        lower *= self.scale
+        est *= self.scale
+        upper *= self.scale
+        return lower, est, upper
 
 class hyperbolic_space(abc_space):
     """
@@ -1084,44 +1667,66 @@ class hyperbolic_space(abc_space):
         real = math.real
         x = to_real(real, x)
         return math.asinh(x)
+    def _estimate_inv_sphere_v3(self, m):
+        math = self.math
+        real = math.real
+        m /= self.scale**3
+        if m > real(10):
+            est = math.asinh(m / math.pi) / real(2)
+            gap = real(1) / real(2)
+            lower = max(est - gap, real(0))
+            upper = est + gap
+        else:
+            est = math.cbrt(m * real(3) / (math.tau * real(2)))
+            gap = real(1) / real(8)
+            lower = max(est - gap, real(0))
+            upper = est
+        lower *= self.scale
+        est *= self.scale
+        upper *= self.scale
+        return lower, est, upper
 
 class space(abc_space):
     """
     The unified space class! Works for spaces with constant curvature.
     Just give it a math context and a curvature and it will take care of the rest.
     """
-    def __init__(self, curvature, math = common_math):
+    def __init__(self, curvature = None, fake_curvature = None, radius = None, math = common_math):
         """
         Construct a space.
 
-        Note: we use a convention here that we
-        make the curvature a 1D quantity always, with dimension 1 / L.
-        This means, for example, if you are working in metres,
-        and the true curvature is -4 / m^2 in 2 dimensions,
-        you should set K = -2.
-        Similarly, if the curvature is 16 / m^4 in 4 dimensions,
-        you should set K = 2.
-        Euclidean is always K = 0, elliptic is K > 0, hyperbolic is K < 0.
-        The benefits of this convention is that it makes the expression
-        of curvature independent of the dimensionality of the space,
-        and it avoids using complex numbers, as if you wanted, say
-        the true 2D curvature to be -1 / m^2
-        then the radius of curvature would need to be i m.
-        The trade-off, of course, is that some of the numerical math formulas
-        used to ultimately correct for this difference, look less like
-        the true formulas.
+        Note: curvature is inherently a 2D quantity.
+        It may sound counterintuitive that an N-dimensional space
+        is always described with a 2D quantity, but that's how it works.
+        The curvature is defined as
+        K = 1/R^2
+        where R is the radius of curvature.
+        This means that K = 0 requires an infinite radius,
+        and K < 0 requires an imaginary radius.
+
+        We also allow for constructing from a "fake curvature",
+        a 1D quantity k satisfying
+        K = k |k|
+        This allows for avoiding imaginary numbers.
         """
         self.math = math
+        if sum(map((lambda x:x is not None), (curvature, fake_curvature, radius))) != 1:
+            raise ValueError('Must provide exactly 1 value specifying the curvature')
+        if radius is not None:
+            # important! this must coerce K to a real number, not complex
+            curvature = math.re(math.real(1) / (radius * radius))
+        if fake_curvature is not None:
+            curvature = fake_curvature * abs(fake_curvature)
         self.curvature = curvature
         if curvature == 0:
             self.base = euclidean_space
             self.scale = math.real(1)
         elif curvature > 0:
             self.base = elliptic_space
-            self.scale = math.real(1) / math.real(curvature)
+            self.scale = math.real(1) / math.sqrt(math.real(curvature))
         else:
             self.base = hyperbolic_space
-            self.scale = - math.real(1) / math.real(curvature)
+            self.scale = math.real(1) / math.sqrt(-math.real(curvature))
     def __repr__(self):
         if self.math == common_math:
             ext = ''
@@ -1194,23 +1799,27 @@ class space(abc_space):
         leg(x, z)
         assuming correct types
         """
-        return self.base._leg(self, x / self.scale, y / self.scale) * self.scale
+        return self.base._leg(self, x / self.scale, z / self.scale) * self.scale
+    def magnitude_of(self, point, use_quick=False):
+        return self.base.magnitude_of(self, point, use_quick=use_quick)
     def sphere_s1(self, r):
         return self.base.sphere_s1(self, r)
     def inv_sphere_s1(self, m):
-        return self.base.inv_sphere_s1(self, r)
+        return self.base.inv_sphere_s1(self, m)
     def sphere_v2(self, r):
         return self.base.sphere_v2(self, r)
     def inv_sphere_v2(self, m):
-        return self.base.inv_sphere_v2(self, r)
+        return self.base.inv_sphere_v2(self, m)
     def sphere_s2(self, r):
         return self.base.sphere_s2(self, r)
     def inv_sphere_s2(self, m):
-        return self.base.inv_sphere_s1(self, r)
+        return self.base.inv_sphere_s2(self, m)
     def sphere_v3(self, r):
         return self.base.sphere_v3(self, r)
     def inv_sphere_v3(self, m):
-        return self.base.inv_sphere_v3(self, r)
+        return self.base.inv_sphere_v3(self, m)
+    def _estimate_inv_sphere_v3(self, m):
+        return self.base._estimate_inv_sphere_v3(self, m)
     def cosine_law_side(self, a, b, C):
         return self.base.cosine_law_side(self, a, b, C)
     def cosine_law_angle(self, a, b, c):
@@ -1225,3 +1834,4 @@ class space(abc_space):
         return self.base.sine_law_angle(self, a, A, b)
     def distance_between(self, p, q):
         return self.base.distance_between(self, p, q)
+
