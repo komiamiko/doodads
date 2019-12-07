@@ -40,9 +40,9 @@ def _fair_sharing_array(n=3, degree=2, limit=10**6, use_numpy=False):
     however, we can cheat a bit!
     We might say that the term epsilon^m
     does not have an effect on the sequence until item k=F(m)
-    where all previous terms are equal.
+    where all previous terms are equal for at least 2 agents.
     It is not known how fast F grows, or if it is finite for all m.
-    It is known that F(m) ~ 2^m for n=2
+    It is known that F(m) = 2^m exactly for n=2
     and F grows at least as fast for higher n.
     Thus, we can make an optimization and only keep track of polynomials
     up to a fixed degree, which is the parameter.
