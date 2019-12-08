@@ -575,27 +575,57 @@ class ordinal(ordinal_type):
     def __hash__(self):
         return self._hash
     def __str__(self):
-        bits = []
-        for s, i, c in self._vnf:
-            if s == 0:
-                bit = '\\omega^{' + str(i) + '}'
-            else:
-                bit = '\\varphi_' + str(s) + '(' + str(i) + ')'
-            if c != 1:
-                bit = bit + ' \\cdot ' + str(c)
-            bits.append(bit)
-        for p, c in self._cnf:
-            bit = '\\omega'
-            if p != 1:
-                bit = bit + '^{' + str(p) + '}'
-            if c != 1:
-                bit = bit + ' \\cdot ' + str(c)
-            bits.append(bit)
-        if self._nat:
-            bits.append(str(self._nat))
-        if not bits:
-            return '0'
-        return '{' + ' + '.join(bits) + '}'
+        # keep consistent format that makes sense for the hierarchy
+        normalize_at = 0
+        if self._vnf and self._vnf[0][0] >= omega:
+            normalize_at = 2
+        elif self._vnf and self._vnf[0][0] >= 3:
+            normalize_at = 1
+        def _str(self):
+            if not isinstance(self, ordinal):
+                return '{' + str(self) + '}'
+            bits = []
+            for s, i, c in self._vnf:
+                if s == 0 and normalize_at == 0:
+                    bit = '\\omega^{' + \
+                          _str(i) + '}'
+                elif s == 1 and normalize_at == 0:
+                    bit = '\\varepsilon_{' + \
+                          _str(i) + '}'
+                elif s == 2 and normalize_at == 0:
+                    bit = '\\zeta_{' + \
+                          _str(i) + '}'
+                elif normalize_at == 1:
+                    bit = '\\varphi_' + \
+                          _str(s) + '(' + \
+                          _str(i) + ')'
+                else:
+                    bit = '\\varphi(' + \
+                          _str(s) + ', ' + \
+                          _str(i) + ')'
+                if c != 1:
+                    bit = bit + ' \\cdot ' + _str(c)
+                bits.append(bit)
+            for p, c in self._cnf:
+                if normalize_at == 0:
+                    bit = '\\omega'
+                    if p != 1:
+                        bit = bit + '^' + _str(p)
+                elif normalize_at == 1:
+                    bit = '\\varphi_0(' + \
+                          _str(p) + ')'
+                else:
+                    bit = '\\varphi(0, ' + \
+                          _str(p) + ')'
+                if c != 1:
+                    bit = bit + ' \\cdot ' + _str(c)
+                bits.append(bit)
+            if self._nat:
+                bits.append(_str(self._nat))
+            if not bits:
+                return '0'
+            return '{' + ' + '.join(bits) + '}'
+        return _str(self)
     def __repr__(self):
         return 'ordinal(_nat = ' + repr(self._nat) + ', _cnf = ' + repr(self._cnf) + ', _vnf = ' + repr(self._vnf) + ')'
     def __eq__(self, other):
