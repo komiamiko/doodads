@@ -9,3 +9,4 @@ For more players, the problem gets more difficult. A simple model assigns item n
 Relevant files:
 
 1. `fair_sharing.py` computes fair sharing sequences
+2. `amiko_fs.pdf` preliminary findings by [@komiamiko](/komiamiko) related to fair sharing sequences
