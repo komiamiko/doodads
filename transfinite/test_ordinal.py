@@ -157,6 +157,28 @@ class TestOrdinalArithmetic(unittest.TestCase):
         self.assertTrue(omega + omega > omega + 1)
         self.assertTrue(omega + 1 + omega == omega + omega)
 
+        big = 1<<1000
+        self.assertTrue(omega + big < omega + omega)
+        self.assertTrue(big + omega == omega)
+        
+        self.assertTrue(omega + omega < omega + omega + omega)
+        self.assertTrue(omega + omega + omega == omega + (omega + omega))
+        self.assertTrue(omega + omega + omega + omega == (omega + omega) + (omega + omega))
+
+    def test_addition_veblen(self):
+        from ordinal import omega, epsilon_0, veblen
+
+        # more tests at the veblen hierarchy
+
+        A = veblen(0, omega)
+        self.assertTrue(omega + A == A)
+        self.assertTrue(A + omega > A)
+        self.assertTrue(A + omega < A + A)
+        self.assertTrue(A < epsilon_0)
+        self.assertTrue(A + epsilon_0 == epsilon_0)
+        self.assertTrue(epsilon_0 + omega + A == epsilon_0 + A)
+        self.assertTrue(epsilon_0 + A < epsilon_0 + epsilon_0)
+
     def test_multiplication(self):
         from ordinal import omega
 
@@ -171,6 +193,89 @@ class TestOrdinalArithmetic(unittest.TestCase):
         self.assertTrue((omega + 1) * omega == omega * omega)
         self.assertTrue(omega * (omega + 1) == omega * omega + omega)
         self.assertTrue((omega + 2) * (omega + 2) == omega * omega + omega * 2 + 2)
+
+        # harder tests
+
+        A = omega * 2 + 3
+        self.assertTrue(omega * A == omega * omega * 2 + omega * 3)
+        self.assertTrue(A * omega == omega * omega)
+        self.assertTrue(A * A == omega * omega * 2 + omega * 6 + 3)
+        self.assertTrue(A * A * A == A * (A * A))
+
+    def test_multiplication_veblen(self):
+        from ordinal import omega, epsilon_0, veblen
+        # go harder! use veblen
+
+        self.assertTrue(epsilon_0 * 2 > epsilon_0)
+        self.assertTrue(epsilon_0 * 2 < epsilon_0 * omega)
+        self.assertTrue(2 * epsilon_0 == epsilon_0)
+        self.assertTrue(omega * epsilon_0 == epsilon_0)
+        self.assertTrue(omega * 2 * epsilon_0 == epsilon_0)
+        self.assertTrue(omega * (epsilon_0 * 2) == epsilon_0 * 2)
+        self.assertTrue(epsilon_0 * 2 * epsilon_0 == epsilon_0 * epsilon_0)
+        self.assertTrue(epsilon_0 * 2 * (epsilon_0 * 2) == epsilon_0 * epsilon_0 * 2)
+        self.assertTrue(epsilon_0 * omega == veblen(0, epsilon_0 + 1))
+        self.assertTrue(epsilon_0 * 2 * omega == veblen(0, epsilon_0 + 1))
+        self.assertTrue(epsilon_0 * 2 * omega * 2 == veblen(0, epsilon_0 + 1) * 2)
+
+    def test_power(self):
+        from ordinal import ordinal, omega, epsilon_0, veblen
+
+        # test integer cases work as expected
+
+        for ni, nj in itertools.product(*[range(5)]*2):
+            for i in (ni, ordinal(ni)):
+                for j in (nj, ordinal(nj)):
+                    self.assertTrue(i ** j == ni ** nj)
+
+        # test some special cases that reduce easily
+        As = (
+            1,
+            2,
+            3,
+            8,
+            omega,
+            omega + 1,
+            omega * 2,
+            omega * 3 + 4,
+            epsilon_0,
+            epsilon_0 + 1,
+            epsilon_0 * 2 + 3,
+            veblen(7, 7) + veblen(5, 5) * 3
+            )
+        for A in As:
+            self.assertTrue(A ** 0 == 1)
+            self.assertTrue(A ** 1 == A)
+            self.assertTrue(2 ** (omega * A) == veblen(0, A))
+            self.assertTrue(5 ** (omega * A) == veblen(0, A))
+
+        # test some easy known cases
+        self.assertTrue(omega ** 2 == omega * omega)
+        self.assertTrue(omega ** epsilon_0 == epsilon_0)
+        self.assertTrue(omega ** (epsilon_0 + 1) == epsilon_0 * omega)
+        self.assertTrue(omega ** omega, veblen(0, omega))
+        self.assertTrue(omega ** (omega * 2 + 3), veblen(0, omega * 2 + 3))
+
+        # test small powers behave as expected
+        for A in As:
+            self.assertTrue(A ** 2 == A * A)
+            self.assertTrue(A ** 3 == A * A * A)
+
+        # test larger powers match results of exponentiation by squaring
+        for A in As:
+            A2 = A * A
+            A4 = A2 * A2
+            A8 = A4 * A4
+            A16 = A8 * A8
+            self.assertTrue(A ** 4 == A4)
+            self.assertTrue(A ** 5 == A4 * A)
+            self.assertTrue(A ** 11 == A8 * A2 * A)
+            self.assertTrue(A ** 49 == A16 * A16 * A16 * A)
+
+        # test power laws
+        for A,B,C in itertools.product(*[As]*3):
+            self.assertTrue(A ** (B * C) == (A ** B) ** C)
+            self.assertTrue(A ** (B + C) == A ** B * A ** C)
 
     def test_veblen(self):
         from ordinal import veblen, omega, epsilon_0, zeta_0

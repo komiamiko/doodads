@@ -383,6 +383,19 @@ def reduce_bisected(func, iterable, nothing=0):
 def sum_bisected(iterable):
     return reduce_bisected(operator.add, iterable)
 
+def pow_sq(x, y):
+    """
+    Compute x^y, without calling its pow,
+    using exponentiation by squaring.
+    """
+    r = 1
+    while y:
+        if y & 1:
+            r = r * x
+        x = x * x
+        y >>= 1
+    return r
+
 class _named_const(object):
     """
     Represents a named constant value with no relation to anything else.
@@ -499,12 +512,12 @@ class ordinal(ordinal_type):
             if isinstance(value, str):
                 self.__init__(name = value)
                 return
-            if isinstance(value, int):
+            elif isinstance(value, int):
                 if value < 0:
                     raise ValueError('Integer ordinal cannot be negative')
                 self.__init__(_nat = value)
                 return
-            if isinstance(value, ordinal):
+            elif isinstance(value, ordinal):
                 _nat = value._nat
                 _cnf = value._cnf
                 _vnf = value._vnf
@@ -512,18 +525,19 @@ class ordinal(ordinal_type):
                     _cnf = list(_cnf)
                     _vnf = list(_vnf)
                 self.__init__(_nat = _nat, _cnf = _cnf, _vnf = _vnf)
-            raise TypeError('Cannot convert from this value type')
+            else:
+                raise TypeError('Cannot convert from this value type')
         # Is this a specific named ordinal?
         if name in _omega_aliases:
             self.__init__(_cnf = [(1, 1)])
             return
-        if name in _epsilon_0_aliases:
+        elif name in _epsilon_0_aliases:
             self.__init__(_vnf = [(1, 0, 1)])
             return
-        if name in _zeta_0_aliases:
+        elif name in _zeta_0_aliases:
             self.__init__(_vnf = [(2, 0, 1)])
             return
-        if name is not None:
+        elif name is not None:
             raise ValueError('Named ordinal unknown')
         # Use the internal representation
         # VNF + CNF + NAT
@@ -541,7 +555,12 @@ class ordinal(ordinal_type):
         self._cnf = _cnf
         self._vnf = _vnf
         # Precompute the hash
-        self._hash = hash((ordinal, self._nat) + tuple(self._cnf) + tuple(self._vnf))
+        _hash = hash(self._nat)
+        if self._cnf:
+            _hash = hash((_hash, 1, tuple(self._cnf)))
+        if self._vnf:
+            _hash = hash((_hash, 2, tuple(self._vnf)))
+        self._hash = _hash
         # Precompute the kind
         if self._nat == 0:
             if self._cnf or self._vnf:
@@ -595,7 +614,7 @@ class ordinal(ordinal_type):
                 elif s == 2 and normalize_at == 0:
                     bit = '\\zeta_{' + \
                           _str(i) + '}'
-                elif normalize_at == 1:
+                elif normalize_at <= 1:
                     bit = '\\varphi_' + \
                           _str(s) + '(' + \
                           _str(i) + ')'
@@ -628,6 +647,12 @@ class ordinal(ordinal_type):
         return _str(self)
     def __repr__(self):
         return 'ordinal(_nat = ' + repr(self._nat) + ', _cnf = ' + repr(self._cnf) + ', _vnf = ' + repr(self._vnf) + ')'
+    def __int__(self):
+        if self._vnf or self._cnf:
+            raise ValueError('Cannot convert infinite ordinal to integer')
+        return self._nat
+    def __bool__(self):
+        return self != 0
     def __eq__(self, other):
         if self is other:
             return True
@@ -872,7 +897,7 @@ class ordinal(ordinal_type):
                 if l_h == 1:
                     return ordinal(_cnf = [(l_value[0] + r_value[0], r_value[1])])
                 if l_h == 2:
-                    l_up = ordinal(_vnf = [l_value]) if l_value[0] != 0 else l_value[1]
+                    l_up = ordinal(_vnf = [l_value[:-1] + (1,)]) if l_value[0] != 0 else l_value[1]
                     r_up = r_value[0]
                     return _exp_add(l_up, r_up, r_value[-1])
             if r_h == 2:
@@ -880,11 +905,11 @@ class ordinal(ordinal_type):
                     return ordinal(_vnf = [r_value])
                 if l_h == 1:
                     l_up = l_value[0]
-                    r_up = ordinal(_vnf = [r_value]) if r_value[0] != 0 else r_value[1]
+                    r_up = ordinal(_vnf = [r_value[:-1] + (1,)]) if r_value[0] != 0 else r_value[1]
                     return _exp_add(l_up, r_up, r_value[-1])
                 if l_h == 2:
-                    l_up = ordinal(_vnf = [l_value]) if l_value[0] != 0 else l_value[1]
-                    r_up = ordinal(_vnf = [r_value]) if r_value[0] != 0 else r_value[1]
+                    l_up = ordinal(_vnf = [l_value[:-1] + (1,)]) if l_value[0] != 0 else l_value[1]
+                    r_up = ordinal(_vnf = [r_value[:-1] + (1,)]) if r_value[0] != 0 else r_value[1]
                     return _exp_add(l_up, r_up, r_value[-1])
         for otup in other._vnf:
             pieces.append(_term_mul(self_h, self_top, 2, otup))
@@ -902,6 +927,102 @@ class ordinal(ordinal_type):
         return sum_bisected(pieces)
     def __rmul__(self, other):
         return ordinal(other) * self
+    def __pow__(self, other):
+        """
+        Power of 2 ordinals.
+        """
+        # some small exceptional cases
+        # rule: A^0 = 1
+        # rule: 1^B = 1
+        if other == 0 or self == 1:return 1
+        # rule: A^1 = A
+        if other == 1:return self
+        # rule: 0^B = 0 (except B=0, which we already covered)
+        if self == 0:return 0
+        # is this a natural number?
+        if self < omega:
+            s = int(self)
+            if other < omega:
+                # shortcut, use integer power
+                return s ** int(other)
+            # self is integer but other is infinite ordinal
+            # rule: n^(wB) = w^B
+            # thus we must "left decrement" the other exponents
+            # Veblen hierarchy is entirely unaffected
+            rvnf = other._vnf
+            # CNF hierarchy is only affected for finite exponents
+            rcnf = []
+            rnat = 0
+            for p, n in other._cnf:
+                if p == 1:
+                    # special case 1 -> 0 degrades to natural number
+                    rnat = n
+                elif p < omega:
+                    rcnf.append((int(p) - 1, n))
+                else:
+                    rcnf.append((p, n))
+            # construct the result
+            base = veblen(0, ordinal(_vnf = rvnf, _cnf = rcnf, _nat = rnat))
+            # and then handle the natural number term if needed
+            if other._nat:
+                mul = s ** other._nat
+                base = base * mul
+            # finally, return it
+            return base
+        # rules from here for A^B
+        # if B is a limit ordinal
+        #   let C be the largest term of A (erase coefficient)
+        #   result = C^B
+        # if B = D + 1 for some D
+        #   let Cn be the largest term of A
+        #   result = C^D n A
+        #   note the n only matters if A has a natural number term,
+        #   because every other term in A ultimately erases it
+        other = ordinal(other)
+        osucc = kind(other) == kind_successor
+        # also branch based on whether we have self as successor since that tends to be annoying
+        if osucc and kind(self) == kind_successor:
+            case = 2
+        elif osucc:
+            case = 1
+        else:
+            case = 0
+        # handle the common exponent part, from the exponent
+        if case == 2:
+            exp = ordinal(_vnf = other._vnf, _cnf = other._cnf)
+        elif case == 1:
+            exp = ordinal(_vnf = other._vnf, _cnf = other._cnf, _nat = other._nat - 1)
+        else:
+            exp = other
+        # do a sort of X -> exp(log(X)) thing on the base largest part
+        if self._vnf:
+            # self falls in Veblen hierarchy
+            # extract the coefficient
+            exn = self._vnf[0][-1]
+            # may or may not be a fixed point of exp
+            if self._vnf[0][0] == 0:
+                base = self._vnf[0][1]
+            else:
+                base = ordinal(_vnf = [self._vnf[0][:-1]+(1,)])
+        else:
+            # self falls in CNF hierarchy
+            # extract the coefficient
+            exn = self._cnf[0][-1]
+            # just grab the exponent, CNF definition allows it
+            base = self._cnf[0][0]
+        # combine the exponent we got with the other exponent
+        base = veblen(0, base * exp)
+        # only multiplication left, and that's already implemented!
+        if case == 2:
+            # there doesn't seem to be an efficient way to telescope this when
+            # self is a successor ordinal
+            # so let's just do exponentiation by squaring to finish it
+            return base * pow_sq(self, other._nat)
+        if case == 1:
+            return base * exn * self
+        return base
+    def __rpow__(self, other):
+        return ordinal(other) ** self
 
 def veblen(sub, value):
     """
