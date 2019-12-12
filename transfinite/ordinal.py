@@ -471,6 +471,17 @@ def tier(value):
         return value._tier
     raise ValueError('Value is not of a known type representing a mathematical ordinal.')
 
+def predecessor(value):
+    """
+    Commonly used operation which takes the predecessor of a successor ordinal.
+    Implemented as its own function because ordinals don't allow subtraction directly.
+    """
+    if kind(value) != kind_successor:
+        raise ValueError('Predecessor not defined for ordinals other than successor ordinals')
+    if isinstance(value, numbers.Real):
+        return value - 1
+    return ordinal(_vnf = value._vnf, _cnf = value._cnf, _nat = value._nat - 1)
+
 class ordinal(ordinal_type):
     """
     Programmatic implementation of ordinal numbers.
@@ -1084,7 +1095,114 @@ class fundamental(object):
             raise TypeError('Value is not an ordinal number.')
         if kind(value) != kind_limit:
             raise ValueError('Not a limit ordinal, no fundamental sequence exists')
-        pass
+        import functools
+        import operator
+        # remember where this is coming from
+        self.source = value
+        # find a formula for it as
+        # A[n] = direct(n) with cache
+        # or
+        # A[n] = step^n (start) with cache
+        # or
+        # A[n] = index[n] without cache
+        # applies "then" function after, if it exists
+        start = 0
+        self._direct = self._step = self._then = self._index = self._cache = None
+        to_index = None
+        if len(value._vnf) + len(value._cnf) > 1:
+            if value._cnf:
+                to_add = ordinal(_vnf=value._vnf, _cnf=value._cnf[:-1])
+                to_index = ordinal(_cnf=[value._cnf[-1]])
+            else:
+                to_add = ordinal(_vnf=value._vnf[:-1])
+                to_index = ordinal(_vnf=[value._vnf[-1]])
+            self._then = functools.partial(operator.add, to_add)
+        elif value._vnf:
+            term = value._vnf[0]
+            if term[-1] > 1:
+                to_add = ordinal(_vnf=[term[:-1] + (term[-1] - 1,)])
+                to_index = ordinal(_vnf=[term[:-1] + (1,)])
+                self._then = functools.partial(operator.add, to_add)
+            elif kind(term[1]) == kind_limit:
+                to_index = term[1]
+                self._then = functools.partial(veblen, term[0])
+            elif term[0] == 0:
+                # it's in the veblen hierarchy, so we can skip checking for plain omega^1
+                #   (furthermore, something later down eventually invokes the veblen function)
+                # we also already checked for limit argument
+                # so it must be a successor!
+                to_mul = veblen(0, predecessor(term[1]))
+                self._direct = (lambda n:n)
+                self._then = functools.partial(operator.mul, to_mul)
+            elif kind(term[0]) == kind_successor:
+                if term[1] != 0:
+                    start = veblen(term[0], predecessor(term[1])) + 1
+                to_sub = predecessor(term[0])
+                self._step = functools.partial(veblen, to_sub)
+            else:
+                if term[1] == 0:
+                    to_arg = 0
+                else:
+                    to_arg = veblen(term[0], predecessor(term[1])) + 1
+                to_index = term[0]
+                self._then = (lambda a:veblen(a, to_arg))
+        else:
+            term = value._cnf[0]
+            if term[-1] > 1:
+                to_add = ordinal(_cnf=[term[:-1] + (term[-1] - 1,)])
+                to_index = ordinal(_cnf=[term[:-1] + (1,)])
+                self._then = functools.partial(operator.add, to_add)
+            elif term[0] == 1:
+                self._direct = (lambda n:n)
+            elif kind(term[0]) == kind_successor:
+                to_mul = veblen(0, predecessor(term[0]))
+                self._direct = (lambda n:n)
+                self._then = functools.partial(operator.mul, to_mul)
+            else:
+                to_index = term[0]
+                self._then = functools.partial(veblen, 0)
+        if to_index is not None:
+            self._index = fundamental(to_index, cache_every = cache_every)
+        if self._step is not None:
+            self._cache = [start]
+        self.cache_every = cache_every
+    def __str__(self):
+        return str(self.source) + '[\\cdot]'
+    def __repr__(self):
+        return 'fundamental(' + repr(self.source) + ')'
+    def __hash__(self):
+        return hash((fundamental, self.source))
+    def __eq__(self, other):
+        if self is other:return True
+        if not hasattr(other, 'source'):return False
+        return self.source == other.source
+    def __ne__(self, other):
+        return not self == other
+    def __iter__(self):
+        import itertools
+        import functools
+        import operator
+        return iter(map(functools.partial(operator.getitem, self), itertools.count()))
+    def __getitem__(self, n):
+        if self._direct is not None:
+            result = self._direct(n)
+        elif self._index is not None:
+            result = self._index[n]
+        else:
+            ce = self.cache_every
+            l, s = divmod(n, ce)
+            while len(self._cache) < l:
+                last = self._cache[-1]
+                for _ in range(ce):
+                    last = self._step(last)
+                self._cache.append(last)
+            last = self._cache[-1]
+            for _ in range(s):
+                last = self._step(last)
+            result = last
+        if self._then is not None:
+            result = self._then(result)
+        return result
 
 _omega_aliases = {'omega','w','\\omega'}
 _epsilon_0_aliases = {'epsilon_0','epsilon0','eps_0','eps0','e_0','e0','\\epsilon_0'}
