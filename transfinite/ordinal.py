@@ -1211,3 +1211,117 @@ _zeta_0_aliases = {'zeta_0','zeta0','z_0','z0','\\zeta_0'}
 omega = ordinal('omega')
 epsilon_0 = ordinal('epsilon_0')
 zeta_0 = ordinal('zeta_0')
+
+def fast_growing_hierarchy(sub, value, limit_steps=None, limit_complexity=1.0, convert_to='latex', printer=None):
+    """
+    Fun function to do an expansion of a
+    fast growing hierarchy (FGH) expression.
+    FGH in all variants are defined like so:
+
+      f  (n) = n + 1
+       0
+
+                 n
+      f   (n) = f (n)
+       α+1       α
+
+      f (n) = f    (n)
+       α       α[n]
+
+    This covers values for zero, successor, and limit ordinals.
+    FGH variants differ sometimes in the choice of f_0,
+    but mostly in the fundamental sequences used.
+    They are useful for quantifying the sizes of large numbers
+    due to the simple recursive structure.
+
+    This 
+
+    The expression we will expand is:
+
+      f   (value)
+       sub
+
+    We don't want to write out very large numbers
+    or unreadable expressions.
+    In general, you will never see:
+    - numbers above 1 million or so
+    - predecessor chains longer than 2
+    - nested brackets/subscripts/superscripts chaining more than 2
+    The bounds are mostly hardcoded. (see limit_complexity parameter)
+
+    Additional parameters:
+    - limit_steps - set a maximum number of steps
+    - limit_complexity - factor to tune the maximum allowed complexity, where we allow it
+    - convert_to - what type to convert to, can use None to spit out raw data
+    - printer - if specified, prints at each step
+    """
+    if limit_steps is None:
+        limit_steps = 2**63-1
+    if convert_to is None:
+        convert = (lambda x,y:(x,y))
+    elif convert_to == 'latex':
+        def convert(li, n):
+            if not li:return '{' + str(n) + '}'
+            def cterm(term):
+                result = 'f_{' + str(term[0]) + '}'
+                if term[1] > 1:
+                    result += '^{' + str(term[1]) + '}'
+                return result
+            return '{' + ' \\circ '.join(map(cterm, li)) + '(' + str(n) + ')}'
+    else:
+        raise ValueError(f'Do not know how to convert to type "{convert_to}"')
+    li = [(sub, 1)]
+    n = value
+    if printer:printer(convert(li, n))
+    def add_func(tup):
+        """
+        Adds the function if the iteration count is nonzero.
+        """
+        if tup[1]:
+            li.append(tup)
+    def complexity(value):
+        """
+        Estimate the "complexity" of an ordinal.
+        Used to limit deep expansion.
+        """
+        if value <= 1:return 1
+        if value < omega:return 3
+        return sum(map(lambda x:6+sum(map(complexity, x)), value._vnf)) + \
+               sum(map(lambda x:4+sum(map(complexity, x)), value._cnf)) + \
+               complexity(value._nat)
+    for _ in range(limit_steps):
+        lsub, lcount = li.pop()
+        # do our rules permit expanding the last one?
+        if lsub <= 2:
+            if lsub == 0:
+                n += lcount
+            elif lsub == 1:
+                times = min(lcount, bin_log(10**6//n))
+                if times == 0:break
+                n *= 2**times
+                lcount -= times
+                add_func((lsub, lcount))
+            elif lsub == 2:
+                if n > 16:break
+                n = 2**n * n
+                lcount -= 1
+                add_func((lsub, lcount))
+        elif kind(lsub) == kind_successor:
+            if (lsub > 4 if lsub < omega else lsub._nat > 2):break
+            lcount -= 1
+            add_func((lsub, lcount))
+            add_func((predecessor(lsub), n))
+        else:
+            if lsub >= veblen(3, 0) and n > 1 + limit_complexity or \
+               lsub >= epsilon_0 and n > 2 + limit_complexity:break
+            nx = lsub[n]
+            if complexity(nx) >= 30 * limit_complexity:break
+            lcount -= 1
+            add_func((lsub, lcount))
+            add_func((nx, 1))
+        if printer:printer(convert(li, n))
+        if not li:break
+        if len(li) >= 2 + 3 * limit_complexity:break
+    return convert(li, n)
+
+fgh = fast_growing_hierarchy
