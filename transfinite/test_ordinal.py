@@ -277,6 +277,24 @@ class TestOrdinalArithmetic(unittest.TestCase):
             self.assertTrue(A ** (B * C) == (A ** B) ** C)
             self.assertTrue(A ** (B + C) == A ** B * A ** C)
 
+        # test veblen function at 0 is identical to omega exponential
+        for A in As:
+            self.assertTrue(omega ** A == veblen(0, A))
+
+        # test exponential is non-decreasing in both arguments
+        for A,B in itertools.product(*[As]*2):
+            if A <= 1:continue
+            self.assertTrue(A ** B >= B)
+            self.assertTrue(A ** B >= A)
+
+        # test specific examples
+        self.assertTrue((omega * 2 + 3) ** omega == omega ** omega)
+        self.assertTrue(omega ** epsilon_0 == epsilon_0)
+        self.assertTrue((omega * 2 + 3) ** epsilon_0 == epsilon_0)
+        self.assertTrue(omega ** epsilon_0 * omega == omega ** (epsilon_0 + 1))
+        self.assertTrue(epsilon_0 ** epsilon_0 == omega ** omega ** (epsilon_0 * 2))
+        self.assertTrue(epsilon_0 ** omega == omega ** omega ** (epsilon_0 + 1))
+
     def test_veblen(self):
         from ordinal import veblen, omega, epsilon_0, zeta_0
 
