@@ -333,5 +333,99 @@ class TestOrdinalArithmetic(unittest.TestCase):
         self.assertTrue(veblen(epsilon_0, towers[2] + 1) > towers[2])
         self.assertTrue(veblen(towers[2], towers[1]) > veblen(towers[1], towers[2]))
 
+    def test_fundamental_sequence(self):
+        from ordinal import veblen, omega, epsilon_0, zeta_0, kind, kind_limit
+
+        # lots of increasing ones!
+        As = (
+            5,
+            omega,
+            omega + 3,
+            omega * 2,
+            omega * 3 + 4,
+            omega ** 2,
+            omega ** 2 * 3 + omega * 6,
+            omega ** 3 * 4 + omega ** 2 * 3 + omega * 2,
+            omega ** omega,
+            omega ** omega + omega ** 6 + 4,
+            omega ** omega * 2,
+            omega ** omega * omega,
+            omega ** omega ** omega + omega ** (omega ** 2 * 3) + omega ** 4,
+            omega ** omega ** omega ** omega,
+            epsilon_0,
+            epsilon_0 + omega ** omega,
+            epsilon_0 * 2,
+            epsilon_0 * omega,
+            epsilon_0 ** omega,
+            epsilon_0 ** epsilon_0,
+            veblen(1, 1),
+            veblen(1, 4),
+            veblen(1, omega),
+            veblen(1, veblen(1, veblen(1, 0))),
+            zeta_0,
+            zeta_0 + epsilon_0,
+            zeta_0 + epsilon_0 + omega ** omega + omega + 3,
+            zeta_0 + epsilon_0 + omega ** omega + omega * 3,
+            zeta_0 + epsilon_0 + omega ** omega + omega ** 3,
+            zeta_0 * 2,
+            zeta_0 * 2 + omega ** omega,
+            zeta_0 * 2 + epsilon_0 * 3,
+            zeta_0 * 5 + 1,
+            zeta_0 * omega,
+            zeta_0 * epsilon_0,
+            zeta_0 ** 2,
+            zeta_0 ** epsilon_0,
+            veblen(1, zeta_0 + 1),
+            veblen(2, epsilon_0),
+            veblen(2, epsilon_0 + 1),
+            veblen(2, veblen(1, 1)),
+            veblen(3, 0),
+            veblen(5, veblen(6, omega) * 2),
+            veblen(omega, 0),
+            veblen(omega, 1),
+            veblen(omega, omega),
+            veblen(omega, omega ** omega ** omega),
+            veblen(omega, epsilon_0),
+            veblen(omega + 1, 0),
+            veblen(omega + 1, 3),
+            veblen(omega * 3, 0),
+            veblen(zeta_0, zeta_0),
+            veblen(veblen(zeta_0, 1), 1)
+            )
+        # and some integers
+        # note: the A[19] < A[20] test is a good way to check that the comparison is efficient
+        # since the fundamental sequence values tend to increase in complexity with n
+        # the higher index tests are being excluded for now on grounds of blowing up the comparison functions
+        # the exact cause is not known, but it is hypothesized that something is causing
+        # the comparison to be run at least twice per tree depth,
+        # so it degenerates to O(2^n) or worse.
+        # preliminary testing changed the following:
+        # - using hashes to shortcut equality
+        # - writing a custom tuple comparator to prevent duplicate comparisons within the VNF comparator
+        # - caching the VNF comparator results with functools.lru_cache
+        # ... and found no improvement
+        # perhaps the cause is more subtle?
+        Ns = (0, 1, 2, 4, 7)
+        # test the ordering is correct
+        for A,B in zip(As,As[1:]):
+            self.assertTrue(A < B)
+        for A in As:
+            if kind(A) != kind_limit:continue
+            # test fundamental sequence is increasing and probably converging correctly
+            for n, m in zip(Ns, Ns[1:]):
+                self.assertTrue(A[n] < A[m])
+            self.assertTrue(A[Ns[-1]] < A)
+            # test eventual domination by fundamental sequence of a higher ordinal
+            for B in As:
+                if B >= A:continue
+                passed = False
+                # it won't take longer than 10, right?
+                for n in range(2, 10):
+                    C = A[n]
+                    if C >= B:
+                        passed = True
+                        break
+                self.assertTrue(passed)
+
 if __name__ == '__main__':
     unittest.main()

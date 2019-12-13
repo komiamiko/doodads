@@ -860,12 +860,12 @@ class fundamental(object):
         else:
             ce = self.cache_every
             l, s = divmod(n, ce)
-            while len(self._cache) < l:
+            while len(self._cache) <= l:
                 last = self._cache[-1]
                 for _ in range(ce):
                     last = self._step(last)
                 self._cache.append(last)
-            last = self._cache[-1]
+            last = self._cache[l]
             for _ in range(s):
                 last = self._step(last)
             result = last
