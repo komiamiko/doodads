@@ -382,7 +382,606 @@ Larger ordinals are also the "proof-theoretic ordinals" of some commonly used ma
 
 Ordinals also find uses in googology, coupled with a Fast Growing Hierarchy to define extremely large numbers.
 
-Introduction to cardinals
----
+### Bonus - cardinalities of ordinals
 
-TODO
+You might want to read the section on cardinals first, and then get back here.
+
+If you ignore the ordering within an ordinal, you may just look at how many things it orders. This would be its cardinality.
+
+Because there exists a bijection between 2 sets with the same cardinality, this means that every countably infinite ordinal (so from **ω** up to **ω₁**) can have the ordinals less than it mapped one-to-one with the counting numbers. And when you do this map, you can carry the ordering over. By doing this, you can get unusual orderings on the counting numbers corresponding to whatever countably infinite ordinal you want.
+
+#### Even and odd
+
+We briefly mentioned **ω + 1** as emulating the order type of the counting numbers with a special number designated as infinity. We have another slightly interesting ordering to show.
+
+Suppose we put all the even numbers before all the odd numbers. The ordering looks like:
+
+***ω × 2** = 0 < 2 < 4 < 6 < ⋯ < 1 < 3 < 5 < 7 < ⋯*
+
+Most of the time though, when you build an ordering on the counting numbers made to reflect a certain ordinal, it's just weird and not very interesting.
+
+#### An alternate ordering of unlabelled rooted trees
+
+The unlabelled rooted trees have the same cardinality as the natural numbers, so unsurprisingly, there's an ordering for those trees matching any countably infinite order type you can name. We showed you a way to order them like **ε₀** before. And now, we'll show you one that emulates a much larger ordinal. Though we haven't checked it ourselves, this ordering is claimed to have order type the small Veblen ordinal (SVO).
+
+Given 2 trees *A* and *B*, how should we order them? Well, first, if *A ≤ C* for any *C* which is an immediate child of *B*, then *A < B*. Similarly, if *B ≤ C* for any *C* which is an immediate child of *A*, then *B < A*. We have more tiebreaking to do after this. If *A* has less children than *B*, then *A < B*. If *B* has less children than *A*, then *B < A*. Last tiebreaking step, now knowing they have the same number of children. Sort *A*'s children as *a₀ ≤ a₁ ≤ ⋯ ≤ aᵤ* and *B*'s children as *b₀ ≤ b₁ ≤ ⋯ ≤ bᵤ*. If they're identical, then *A = B*, as you might guess. Otherwise, let *aᵨ, bᵨ* be the first pair that differs. Then order *A* and *B* by the ordering of *aᵨ* and *bᵨ*.
+
+#### What ordinals are they?
+
+What ordinals these trees correspond to is not very obvious. We'll write the trees in full again, root at the top.
+
+The zero ordinal is the easiest to figure out. After all, nothing can go lower than a node with no children.
+
+```
+0
+
+o
+```
+
+We'll be reaching into the higher ordinals if we allow many children, so let's count up with *1* child at most for now.
+
+```
+1
+
+o
+|
+o
+
+2
+
+o
+|
+o
+|
+o
+```
+
+You might take a guess now that the successor of whatever ordinal is represented by tree *β* is just a node with *β* as its only child, and indeed, this seems to be the case. If you try writing out all the trees with some number of nodes or less, and then sort them, you'll find this kind of tree always follows another smaller tree - so it has to be the successor.
+
+```
+β + 1
+
+o
+|
+β
+```
+
+#### From ω to ω²
+
+The smallest tree with a node with 2 children would have to be **ω**.
+
+```
+ω
+
+o
+├-┐
+o o
+```
+
+From there, the pattern continues counting up **ω + n**. The smallest step other than succession would have to be **ω × 2**, and after playing around with it a bit, there ends up being only one possible way to build it.
+
+```
+ω × 2
+
+o
+├-┐
+o o
+|
+o
+```
+
+The pattern continues with **ω × 3**.
+
+```
+ω × 3
+
+o
+├-┐
+o o
+|
+o
+|
+o
+```
+
+More generally...
+
+```
+ω × (1 + β)
+
+o
+├-┐
+B o
+```
+
+This rule even works for *β = ω*, and gives the correct tree.
+
+```
+ω²
+
+o
+├-┐
+o o
+├-┐
+o o
+```
+
+... though it breaks for some larger *β*.
+
+#### From ω² to ω³
+
+Taking steps in the middle adds copies of **ω**...
+
+```
+ω² + ω
+
+o
+├-┐
+o o
+|
+o
+├-┐
+o o
+
+ω² + ω × 2
+
+o
+├-┐
+o o
+|
+o
+|
+o
+├-┐
+o o
+```
+
+Taking steps at the end adds copies of **ω²**...
+
+```
+ω² × 2
+
+o
+├-┐
+o o
+├-┐
+o o
+|
+o
+
+ω² × 3
+
+o
+├-┐
+o o
+├-┐
+o o
+|
+o
+|
+o
+```
+
+And then up to **ω³** by adding another layer with 2 children.
+
+```
+ω³
+
+o
+├-┐
+o o
+├-┐
+o o
+├-┐
+o o
+```
+
+#### From ω³ to ωʷ
+
+**ω³** extends the pattern of lengthening chains to add intermediate entries:
+
+```
+ω³ + 1
+
+o
+|
+o
+├-┐
+o o
+├-┐
+o o
+├-┐
+o o
+
+ω³ + ω
+
+o
+├-┐
+o o
+|
+o
+├-┐
+o o
+├-┐
+o o
+
+ω³ + ω²
+
+o
+├-┐
+o o
+├-┐
+o o
+|
+o
+├-┐
+o o
+
+ω³ × 2
+
+o
+├-┐
+o o
+├-┐
+o o
+├-┐
+o o
+|
+o
+```
+
+You can keep adding more layers and the pattern continues.
+
+The first ordinal to break this pattern must be **ωʷ**, and after that it gets more confusing so we won't show beyond **ωʷ**.
+
+```
+ωʷ
+
+o
+├-┐
+o o
+| |
+o o
+```
+
+## Introduction to cardinals
+
+### What are cardinals?
+
+Cardinals are somewhat like numbers, but also a little different. They capture the concept of the sizes of sets, as in, the number of elements in a set. Holding even less information than ordinals, cardinals don't tell you how things are ordered, only how many things there are. Strange things happen in the lands of infinite cardinals, different from what happens in the lands of infinite ordinals.
+
+#### Counting how many things there are
+
+We still should start at the basics. Math speak for how many things are in a set is the "cardinality" of that set, and that count is a cardinal. So let's take some cardinalities (cardinals) of some sets we know, and start giving them names.
+
+How many things are there in nothing? Well, we would say **0**. So **0** is the cardinality of the empty set, *{}*. We would write this as ***0** = | {} |*. The vertical bar brackets are how you write "take the cardinality of this".
+
+Now let's add a thing to our set, say, Alex. So we have *{Alex}*. How many things are there in this set? Well, we'd say **1**. So the name of the cardinality of this set is **1**. We write ***1** = | {Alex} |*. It also happens to be the cardinality of every other set imaginable with *1* thing in it. That's what the cardinality is, after all, it counts how many things are in there.
+
+We add another thing, maybe a few more. Maybe we now have *{Alex, Bee, Cam, Dani, Envy, Fae}*. We count, and there's *6* things in there, so the cardinality is **6**. ***6** = | {Alex, Bee, Cam, Dani, Envy, Fae} |*.
+
+Every counting number is a cardinal, the cardinal for every set with that number of things in it. Make sense?
+
+### Comparison of cardinals
+
+Let's say we have **μ** (the Greek letter mu) which is the cardinality of a set *M*, and **κ** (the greek letter kappa) which is the cardinality of a set *K*.
+
+What it means for **μ** and **κ** to be equal is that it is possible to pair up the items of *M* and the items of *K* one-to-one. In mathematical fancy talk, a one-to-one mapping is called a "bijection" - prefix "bi-" for 2 and "-jection" like injection.
+
+We can pair up all the items of *{Alex, Bee, Cam, Dani}* with all the items of *{1, 2, 3, 8}* and also with all of the items of *{▱, ▲, ◉, ▵}*, and that would show that their cardinalities are all equal, and we never have to mention the number **4**!
+
+```
+Alex ↔ 1 ↔ ▱
+Bee  ↔ 2 ↔ ▲
+Cam  ↔ 3 ↔ ◉
+Dani ↔ 8 ↔ ▵
+```
+
+How we pair them up isn't important for showing that the cardinalities are equal. It only matters whether we can pair them up at all.
+
+#### Bigger and smaller cardinals
+
+If **μ** and **κ** are not equal, then one of them has to be the bigger cardinal. So, let's say **μ** is less than **κ**. What would this mean?
+
+**μ** being less than **κ** means that when you match up all the items of *M* with items of *K*, you'll end up using up all the items of *M* and then still have items of *K* that haven't been matched up. Or, said another way, if you match up every item in *K* with an item in *M*, you will certainly have some 2 items of *K* matched up with the same item of *M*, because there just aren't enough things in *M* to match them up without repeats.
+
+To show this both ways, we'll compare *{Envy, Fae}* and *{☀, ☁, ☂}*.
+
+In the first way, we match up items of *{Envy, Fae}* with items of *{☀, ☁, ☂}* and then we'll be doomed to run out of items in *{Envy, Fae}* before everything in *{☀, ☁, ☂}* gets matched up.
+
+```
+Envy ↔ ☀
+Fae  ↔ ☁
+???  ↔ ☂
+```
+
+In the second way, we match up every item in *{☀, ☁, ☂}* with an item of *{Envy, Fae}* and then be forced to repeat something in *{Envy, Fae}*.
+
+```
+☀ → Envy
+☁ → Fae
+☂ → ???
+```
+
+Well, we tried our best, but no matter what you choose to match *☂* with, you're forced to repeat *Envy* or *Fae*.
+
+### Addition of cardinals
+
+For cardinal arithmetic, it makes sense to start with addition.
+
+We have ***μ** = | M |* and ***κ** = | K |*, and let's say we want to find out what the cardinal **μ + κ** is.
+
+Well, first, we need *M* and *K* to not have overlaps, meaning no item in common. You can get rid of overlaps by replacing items. We know by the rule about one-to-one pairing that this replacing won't change **μ** or **κ**.
+
+Then, we build a new set which contains everything from both *M* and *K*. The way to write this is *M ∪ K*, with that *∪* ("union" symbol) meaning "every item contained in at least one of those sets".
+
+Now we just have to take the cardinality of (count how many things are in) *M ∪ K*, and that cardinality is **μ + κ**.
+
+#### An example of addition
+
+Let's say we want to add ***μ** = | {Alex, Bee, Cam} |* and ***κ** = | {Cam, Dani} |*. Here we can count ***μ** = **3*** and ***κ** = **2***, so we're expecting to get ***μ + κ** = **5***.
+
+First, let's get rid of the overlaps. In the second set, we'll replace *Cam* with *Envy*, so we have ***κ** = | {Dani, Envy} |*.
+
+Now we can merge the sets and get *{Alex, Bee, Cam, Dani, Envy}*. If we count how many things there are, we will get ***3** + **2** = **5***.
+
+### Multiplication of cardinals
+
+Same situation again, but this time we want to figure out what the cardinal **μ × κ** is.
+
+We don't need to get rid of overlaps this time. It's fine to leave both sets as they are.
+
+**μ × κ** counts how many different ways we can make a pair by taking the first item from *M* and taking the second item from *K*. It's important that the order of the pair matters, meaning *(Alex, Bee)* as a pair is not the same as *(Bee, Alex)* as a pair.
+
+By the way, this set of all the pairs is written as *M × K*. That *×* is given the fancy name "Cartesian product", but it really just means "all the pairs".
+
+#### An example of multiplication
+
+This time we want to multiply ***μ** = | {Alex, Bee, Cam} |* and ***κ** = | {Cam, Dani} |*. We could count ***μ** = **3*** and ***κ** = **2***, so we're expecting to get ***μ × κ** = **6***.
+
+What are all the possible pairs? Well, we could make a chart to find out.
+
+```
+          | (?,    Cam) | (?,    Dani)
+----------┼-------------┴-------------
+(Alex, ?) | (Alex, Cam)   (Alex, Dani)
+(Bee,  ?) | (Bee,  Cam)   (Bee,  Dani)
+(Cam,  ?) | (Cam,  Cam)   (Cam,  Dani)
+```
+
+Cam is paired with Cam. So what?
+
+We count **6** different pairs. So ***3** × **2** = **6***.
+
+### Powers of cardinals
+
+The last of the common operations, powers. What would **μᴷ** be?
+
+It is the number of ways to choose from **μ** different things, **κ** times. Or, if we want to talk about them using the sets, it is the number of ways to assign an item in *M* to each item in *K*.
+
+#### An example of a power
+
+Let's say we want to find **μᴷ**, with ***μ** = | {Alex, Bee, Cam} |* and ***κ** = | {Cam, Dani} |*. How many ways can we do this kind of matching?
+
+Well, for starters, the *Cam* in *K* can be matched with any of *{Alex, Bee, Cam}*...
+
+```
+     ┌→ Alex
+Cam -┼→ Bee
+     └→ Cam
+```
+
+And from there, the *Dani* in *K* can be matched with any of *{Alex, Bee, Cam}*...
+
+```
+                    ┌→ Alex
+     ┌→ Alex, Dani -┼→ Bee
+     |              └→ Cam
+     |              ┌→ Alex
+Cam -┼→ Bee,  Dani -┼→ Bee
+     |              └→ Cam
+     |              ┌→ Alex
+     └→ Cam,  Dani -┼→ Bee
+                    └→ Cam
+```
+
+In the end, we count **9** different ways to do this matching. So ***3²** = **9***.
+
+### Counting to infinity
+
+So far, we only worked with finite sets, and everything worked like we'd expected to.
+
+Let's now introduce our first infinitely large set, which everyone can agree is the smallest one. It's the counting numbers, or the "natural numbers" as mathematicians call it. We give it the name *ℕ*, which is a capital Latin letter *N* written in a "blackboard bold" font. If you need to write it yourself, just put 2 lines instead of 1 in the N.
+
+*ℕ = {0, 1, 2, 3, 4, ⋯}*
+
+Mathematicians diagree over whether *ℕ* should include *0*. A lot of the times, it's useful to include *0*, because *0* is a useful number, but other mathematicians say nobody actually starts counting at *0* so it should start at *1* instead, or that *0* sometimes causes problems. For the sake of counting how many there are, it really doesn't matter.
+
+To show just how much it doesn't matter for cardinality, we'll show that *ℕ* with *0* and *ℕ* without *0* have the same cardinality.
+
+```
+0 ↔ 1
+1 ↔ 2
+2 ↔ 3
+3 ↔ 4
+⋮   ⋮
+```
+
+With an infinite number of things, it's not so easy to say we would ever "run out" of things, but we can see that this maps them one-to-one - every number on the left finds something on the right to pair with, and every number on the right finds something on the left to pair with. This one-to-one mapping existing tells us the cardinality of both is the same.
+
+#### A name for the cardinality of the counting numbers - ‎א‎₀
+
+The common name for the size of the counting numbers, which is the first infinite cardinal, is **‎א‎₀**, using the Hebrew letter Aleph/Alef and a subscript *0* to say it's the first. Really, *0*, not *1*. Kind of like the ordinal counting with *0* first.
+
+***‎א‎₀** = | ℕ |*
+
+### Subsets
+
+A topic we skipped earlier is "subsets". Made of the prefix "sub-" for "part of" and "set" which are the sets we know. A subset of a set is part of that set. More specifically, a subset is a set where every item in it is also in the original set.
+
+For example, *{Alex, Bee}*, *{}*, and *{Alex, Bee, Cam}* are all subsets of *{Alex, Bee, Cam}*, since every item in the subset is also in the other set. However, *{Cam, Dani}* is not a subset of that set, because there is *Dani* which is not in *{Alex, Bee, Cam}*.
+
+What can we say about the cardinalities of subsets? Well, let's say we have ***μ** = | M |* and ***κ** = | K |* again, but now *M* is also a subset of *K*. Then ***μ** ≤ **κ***. The subset can't be larger, surely, or else it would have to contain something that the other set doesn't have. It may be equally large. Or it may be smaller. So ***μ** ≤ **κ*** is the most we can say. It's already quite useful though.
+
+### There are just as many even numbers
+
+We can separate *ℕ* into the even numbers and the odd numbers. Surely there are less even numbers than all the counting numbers, right? That would be a good guess. After all, there are the odd numbers which are in the counting numbers but not in the even numbers.
+
+Well, we can pair up all the even numbers with all of the counting numbers, and because we can do this, they must have the same cardinality.
+
+```
+0 ↔ 0
+1 ↔ 2
+2 ↔ 4
+3 ↔ 6
+4 ↔ 8
+⋮   ⋮
+```
+
+But wai! That seems strange. There are also as many even numbers as odd numbers, and together they make up the counting numbers, so then...
+
+***‎א‎₀** + **‎א‎₀** = **‎א‎₀** × **2** = **‎א‎₀***
+
+It sounds wrong, but by the rules we set out, it couldn't be anything else. Accept that infinite cardinals behave strangely.
+
+### A diagonal jump
+
+More strange things happen in the lands of infinite cardinals. One of the things we might ask is, how many pairs of counting numbers are there? Maybe that would be larger than **‎א‎₀**?
+
+Well, let's make another chart to list out all the pairs:
+
+```
+       | (?, 0) | (?, 1) | (?, 2) | (?, 3) | ⋯
+-------┼--------┴--------┴--------┴--------┴---
+(0, ?) | (0, 0)   (0, 1)   (0, 2)   (0, 3)   ⋯
+(1, ?) | (1, 0)   (1, 1)   (1, 2)   (1, 3)   ⋯
+(2, ?) | (2, 0)   (2, 1)   (2, 2)   (2, 3)   ⋯
+(3, ?) | (3, 0)   (3, 1)   (3, 2)   (3, 3)   ⋯
+   ⋮   |    ⋮        ⋮        ⋮        ⋮
+```
+
+As it turns out, we can walk along the diagonals and match up each pair with a counting number.
+
+```
+       | (?, 0) | (?, 1) | (?, 2) | (?, 3) | ⋯
+-------┼--------┴--------┴--------┴--------┴---
+(0, ?) |    0        1        3        6     ⋯
+(1, ?) |    2        4        7       11     ⋯
+(2, ?) |    5        8       12       17     ⋯
+(3, ?) |    9       13       18       24     ⋯
+   ⋮   |    ⋮        ⋮        ⋮        ⋮
+```
+
+That's how we know ***‎א‎₀** × **‎א‎₀** = **‎א‎₀²** = **‎א‎₀***.
+
+Now that we know ***‎א‎₀²** = **‎א‎₀***, we can go further and say ***‎א‎₀ⁿ** = **‎א‎₀*** for every finite **n** which is at least **1**.
+
+### Infinite cardinals still play nicely
+
+While some of the things infinite cardinals do looks strange, there are still some nice things they do. The ordering is sane, in the sense that all cardinals can be compared and you won't end up with nonsensical loops like *μ < κ < ν < μ*. Addition and multiplication don't care which is left and which is right. Addition, multiplication, and powers are all increasing (or at the very least, not decreasing) where you expect them to be increasing.
+
+### Power sets
+
+There's another thing called a "power set". The power set of a set is the set of all its subsets. That's a mouthful, so let's see an example.
+
+What are all the subsets of *{Alex, Bee, Cam}*? Well, they are *{}, {Alex}, {Bee}, {Cam}, {Alex, Bee}, {Alex, Cam}, {Bee, Cam}, {Alex, Bee, Cam}*. If we put that into a new set, we get *{{}, {Alex}, {Bee}, {Cam}, {Alex, Bee}, {Alex, Cam}, {Bee, Cam}, {Alex, Bee, Cam}}*
+
+The power set is written with the capital Latin letter P (in cursive writing if you can) and brackets around the set you're taking the power set of. So here we'd write *P({Alex, Bee, Cam}) = {{}, {Alex}, {Bee}, {Cam}, {Alex, Bee}, {Alex, Cam}, {Bee, Cam}, {Alex, Bee, Cam}}*.
+
+#### Cantor's theorem
+
+Georg Cantor found something neat about power sets.
+
+For a set *M*, we can match up every item in *M* with a set containing just that item, and that set is a subset of *M*, so *P(M)* must be at least as large as *M*. But is it larger?
+
+Let's try to match up items in *M* with items of *P(M)*, and see what might go wrong. Let's say that, for every item in *M*, if we call it *X*, then we map it to *☆X*, which is one of those subsets of *P(M)*. Now we can build a new set, say, *Y*, which is the set containing every *X* that was not contained in *☆X*. No item *X* can possibly map to *Y*, because if it did, then *Y = ☆X*, and by the defininition of *Y*, *X* is in *Y* if and only if *X* is not in *Y = ☆X*, which can't make sense. Thus *Y* is an item of *P(M)* which no item in *M* maps to. We can always find such a *Y*, so this is always the case.
+
+In the end, we must conclude *| P(M) | > | M |*, and this will hold for any set *M*, finite or not.
+
+#### The size of the power set
+
+So, how many items are in *P(M)*?
+
+Well, each subset could also be seen as the result of asking "do I include this item?" for every item in *M*. That question can only be answered *yes* or *no*. This looks a lot like what we said exponentiation was.
+
+And so we have *| P(M) | = 2 ^ | M |*.
+
+We also know this is bigger than the size of the original set, so ***2ᵘ** > **μ*** for every cardinal **μ**.
+
+### Counting up in the ‎ב‎ (beth) numbers
+
+Another name for **‎א‎₀** is **‎ב‎₀**, using the Hebrew letter Beth/Bet. The ‎א‎ and ‎ב‎ numbers differ after the first, but the ‎ב‎ numbers are easier to understand, so we'll look at the ‎ב‎ numbers first.
+
+‎ב‎ numbers use ordinals as subscripts. Don't worry about limit ordinals for now. Let's just see how to get from a ‎ב‎ number to the next.
+
+***‎ב‎ᵦ₊₁** = **2** ^ **‎ב‎ᵦ***
+
+It will certainly be larger than the last, because that's how power sets work.
+
+#### What the ‎א‎ (aleph) numbers are
+
+So, what exactly is different about the ‎א‎ numbers? Well, they don't follow such a straightforward sequence. Or maybe they do.
+
+**‎א‎₀** is the first infinite cardinal. **‎א‎₁** is the second infinite cardinal. And so on.
+
+You might think, well, aren't they the same as the ‎ב‎ numbers?
+
+The thing is, how would you know that there aren't any infinite cardinals between **‎ב‎₀** and **‎ב‎₁**? There might be another, and it could be **‎א‎₁**. Or **‎א‎₁** could just be **‎ב‎₁**.
+
+It's not known how many infinite cardinals are between **‎ב‎₀** and **‎ב‎₁**, or if there are any at all. At the very least, nobody has actually found a set with infinite cardinality between **‎ב‎₀** and **‎ב‎₁**. Our usual modern theories can't prove or disprove the existence of such a set. It's just a math mystery.
+
+### The size of the integers
+
+We're going a bit more mathy. Good on you if you followed up to here, but it's going to get harder from here.
+
+The "integers", being the whole numbers - negative, zero, and positive all included - are commonly written as *ℤ*, a blackboard bold uppercase Latin letter Z.
+
+It's not too hard to see that there's as many integers as counting numbers, so *| ℤ | = **‎א‎₀***.
+
+```
+⋯  5  3  1
+            0  2  4  6 ⋯
+⋯ -3 -2 -1  0 +1 +2 +3 ⋯
+```
+
+#### The size of the rationals
+
+The "rational" numbers are all the fractions, including the fractions that are actually just integers. They're usually written as *ℚ*, a blackboard bold Q.
+
+Every integer is also a rational number, so there must be at least as many rational numbers as there are integers. Every rational number can be written as *ᵘ/v* for some integers *u, v*, so there are at most as many rational numbers as there are pairs of integers.
+
+Turns out, both of these sizes are **‎א‎₀**.
+
+So we get ***‎א‎₀** ≤ |ℚ| ≤ **‎א‎₀***
+
+#### The cardinality of the continuum
+
+So that's a fancy famous phrase in mathematics. But really we're asking about the size of the real numbers. The real numbers are the rational numbers and everything inbetween - the roots, pi, every conceivable weird decimal number, and more. They're what you get when you fill in the gaps. It's usually written as *ℝ*, a blackboard bold R.
+
+If we write out the decimal expansion (which may be infinitely long) of every real number, we end up writing up to **‎א‎₀** digits for each, and each of those digits can be *1* of **10** different things. If you're not convinced yet that there are up to **‎א‎₀** decimal digits, note that every digit can be assigned an integer indicating its position - you may say say the ones' digit is *0*, the tens digit is *1*, the hundreds is *2*, and so on, and for the fractional part, the 1/10 digit is *-1*, the 1/100 digit is *-2*, and so on.
+
+The number of possible decimal expansions is ***10** ^ **‎א‎₀***, and this will hit every real number. There will also be many decimal expansions describing an infinitely large number, which isn't a real number. In any case this tells us there can't be more than ***10** ^ **‎א‎₀*** real numbers.
+
+With a bit of trickery, we can say ***10** ^ **‎א‎₀** ≤ **16** ^ **‎א‎₀** = **2** ^ (**‎א‎₀** × **4**) = **2** ^ **‎א‎₀***. So ***2** ^ **‎א‎₀*** is our new upper limit on *| ℝ |*.
+
+If we had limited ourselves to only using the digits *{3, 7}* (there are **2** of them) and forced the ones digit and larger to be all *0*, then we will end up building some subset of the reals. This subset has size ***2** ^ **‎א‎₀***, which sets a lower limit on *| ℝ |*.
+
+Putting this together, we have ***2** ^ **‎א‎₀** ≤ | ℝ | ≤ **2** ^ **‎א‎₀***. So *| ℝ | = **2** ^ **‎א‎₀** = **‎ב‎₁***.
+
+### Bonus - the value of ‎א‎₀ ^ ‎א‎₀
+
+It should be pretty straightforward by now to convince yourself that ***n** ^ **‎א‎₀** = **‎ב‎₁*** for all finite **n** which is at least **2**. But what about ***‎א‎₀** ^ **‎א‎₀***?
+
+Well, first, we know that the power operation is increasing (not decreasing), so ***2** ^ **‎א‎₀** ≤ **‎א‎₀** ^ **‎א‎₀***.
+
+Now, we need a different way of thinking about what these represent.
+
+You know how your computer stores data in binary form? Well, imagine a binary file with **‎א‎₀** bits. It wouldn't fit on any computer, but we can imagine it. The number of possible binary files with **‎א‎₀** bits is ***2** ^ **‎א‎₀***.
+
+Now, let's imagine an infinitely long (with length **‎א‎₀**, specifically) sequence of counting numbers. The number of possible sequences like this is ***‎א‎₀** ^ **‎א‎₀***. Now, let's suppose there's some encoding, which turns counting numbers into strings of bits in a way that it could be decoded later with no confusion as to what number those bits represented. This encoding doesn't need to be efficient in any way, it can be any stupid encoding, as long as it can't cause *2* different sequences to get encoded to the same binary file.
+
+As an example of a stupid encoding that works, we'll encode every counting number **n** as that many *1* bits followed by a *0* bit. This is "unary" encoding.
+
+The number sequences, then encoded, hit some subset of the binary files of length **‎א‎₀**. So ***‎א‎₀** ^ **‎א‎₀** ≤ **2** ^ **‎א‎₀***.
+
+Putting this all together again, we end up with ***‎א‎₀** ^ **‎א‎₀** = **2** ^ **‎א‎₀** = **‎ב‎₁***.
