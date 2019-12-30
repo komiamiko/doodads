@@ -7,7 +7,7 @@ Of course, we have no business constructing the number, but we can have fun maki
 Relevant files:
 
 1. `kruskal_tree.py` for playing with trees in general
-2. `ktree_graphviz.py` if you have Graphviz installed, you can make tree images
+2. `tree3_graphviz.py` if you have Graphviz installed, you can make tree images
 
 Friedman's explicit construction of a game with about n(4) trees uses a sequence for n(4). TREE(3) is clearly a lot bigger than that. The point of that construction was to demonstrate that TREE(3) is actually really big and humans can't understand how big it is. What is n(4)? Well...
 
