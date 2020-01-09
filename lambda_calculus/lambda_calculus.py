@@ -2,14 +2,8 @@
 Small library for working with very pure functional systems,
 especially within the lambda calculus.
 
-Note: it is recommended to convert all lambda expressions
-to De Bruijn indexed form because
-- it is a normal form that does not need alpha-conversion,
-    and intensionally equivalent functions are guaranteed
-    to be reported as equal
-- the integer indexing scheme is much more efficient in
-    this implementation, and the performance benefit may
-    show for very deep evaluations
+Note: while the De Bruijn indexed form is a useful normal form,
+we do not currently support direct evaluation of the De Bruijn forms.
 """
 
 owns_global_namespace = __name__ == '__main__'
@@ -39,6 +33,7 @@ class lambda_bind(object):
         import collections
         self.named = collections.ChainMap()
         self.indexed = []
+        self._adds = []
     def __getitem__(self, index):
         """
         Get the bound value for a named or indexed variable.
@@ -55,14 +50,29 @@ class lambda_bind(object):
             self.named.maps = [{index:value}] + self.named.maps
         else:
             self.indexed.append(value)
-    def pop(self, index):
+        _adds.append(index)
+    def pop(self):
         """
         Remove the most recent entry for a named or indexed variable.
         """
+        index = self._adds.pop()
         if isinstance(index, str):
             self.named.maps.pop(0)
         else:
             self.indexed.pop()
+    def __len__(self):
+        """
+        How many variables have been bound?
+        Will correctly report variables with the same name as separate.
+        """
+        return len(self._adds)
+    def keep_first(self, n):
+        """
+        Pop until len(self) <= n
+        Effectively trims away inner bindings all at once in a known outer scope.
+        """
+        while len(self) > n:
+            self.pop()
 
 class lambda_var(object):
     """
@@ -80,6 +90,15 @@ class lambda_call(object):
       \lambda x. x x
     The sub-expression "x x" would be represented by a lambda_call,
     since it is a yet unevaluated function call.
+    """
+    pass # TODO
+
+class lambda_lazy(object):
+    """
+    Represents a partial evaluation of an expression with certain substitutions.
+    Called a lazy object because substitutions don't happen until we get to the variables.
+    Behaves like the other types, when needed.
+    Simplifies implementation and improves performance.
     """
     pass # TODO
 
@@ -133,3 +152,45 @@ class lambda_func(object):
                  repr(self.var_name) + ', ' + \
                  repr(self.expr) + ')'
         return result
+    def to_named(self):
+        """
+        Converts this function and all sub-expressions recursively
+        to use the named form.
+        
+        """
+        pass # TODO
+    def to_indexed(self):
+        """
+        Converts this function and all sub-expressions recursively
+        to use De Bruijn indexing.
+        """
+        pass # TODO
+    def evaluate_now(self):
+        """
+        Force evaluation now, and return the evaluated lambda expression.
+        For types other than lambda_lazy, will just return itself.
+        """
+        return self
+    def call(self, arg, binds):
+        """
+        Call this value with some other value.
+        """
+        if self.var_name is None:
+            raise TypeError('Direct call with De Bruijn indexing is not supported. Please convert to named first.')
+        unroll_to = len(binds)
+        binds.append(self.var_name, args)
+        return lambda_lazy(self.expr, binds, unroll_to)
+    def __call__(self, *args):
+        """
+        For convenience: call the function with some arguments
+        and correct currying.
+        Does whatever conversions are necessary along the way.
+        """
+        if self.var_name is None:
+            import warnings
+            warnings.warn('Function evaluation must first convert to named form. Consider saving the named form.')
+            self = self.to_named()
+        for arg in args:
+            self = self.call(arg, lambda_bind())
+        self = self.evaluate_now()
+        return self
