@@ -15,6 +15,21 @@ Important usage notes:
   we do not currently support direct evaluation of the De Bruijn forms.
 """
 
+# pregenerate some random data which will be used to initialize constants
+from random import SystemRandom as sr
+random = sr()
+
+# 64-bit hash mask
+_hash_mask = 2**64 - 1
+# multipliers for Rabin hash
+_hash_mul = [random.getrandbits(64) & ~4 | 1 for _ in range(2)]
+# multiplicative inverses mod 2^64
+_hash_mul_inv = [pow(v,2**62-1,2**64) for v in _hash_mul]
+
+# get rid of the random generator now that we don't need it anymore
+del sr
+del random
+
 def _name_generator():
     """
     The current name generator, which is an iterable.
@@ -42,14 +57,12 @@ class lambda_bind(object):
     and we need the innermost scope to take priority,
     but not discard the outer scope's variable value once the inner scope ends.
 
-    Hash and comparison are implemented, but not considered a common use case,
-    so they are not highly optimized. If it turns out that hashing or
-    equality is a significant performance issue, we will change the code
-    with a trade-off: hash intermediate values will be part of the state
-    and all update operations will take slightly more work to also update
-    the hash values, and thus the hash method becomes O(1) instead of O(N).
+    Hash values are kept as part of the state and updated along with the
+    update operations. This way, the hash operation can be O(1),
+    at O(1) extra cost when updating. More specifically, a 128-bit internal
+    hash state is maintained, and this is also used for equality checks.    
     """
-    def __init__(self, state=None):
+    def __init__(self, adds=None):
         """
         Initialize the bindings object with no variables bound.
         If state is given, initializes using it instead.
@@ -58,8 +71,10 @@ class lambda_bind(object):
         self.named = collections.ChainMap()
         self.indexed = []
         self._adds = []
-        if state is not None:
-            self.named, self.indexed, self._adds = state
+        self._hash = [hash((v, lambda_bind)) for v in _hash_mul]
+        if adds is not None:
+            for index, value in adds:
+                self.append(index, value)
     def __getitem__(self, index):
         """
         Get the bound value for a named or indexed variable.
@@ -81,16 +96,29 @@ class lambda_bind(object):
             self.named.maps = [{index:value}] + self.named.maps
         else:
             self.indexed.append(value)
-        _adds.append(index)
+        self._adds.append(index)
+        # update hash
+        hash_add = hash((index, value))
+        for i in range(len(self._hash)):
+            self._hash[i] = (self._hash[i] * _hash_mul[i] + hash_add) & _hash_mask
     def pop(self):
         """
-        Remove the most recent entry for a named or indexed variable.
+        Remove the most recent entry for a named or indexed variable,
+        and return the value.
         """
         index = self._adds.pop()
         if isinstance(index, str):
-            self.named.maps.pop(0)
+            value = next(iter(
+                self.named.maps.pop(0)
+                .values()))
         else:
-            self.indexed.pop()
+            value = self.indexed.pop()
+        # update hash
+        hash_add = hash((index, value))
+        for i in range(len(self._hash)):
+            self._hash[i] = ((self._hash[i] - hash_add) * _hash_mul_inv[i]) & _hash_mask
+        # return popped value
+        return value
     def __len__(self):
         """
         How many variables have been bound?
@@ -104,6 +132,16 @@ class lambda_bind(object):
         """
         while len(self) > n:
             self.pop()
+    def flatten(self, destructive=False):
+        """
+        Get a list of (index, value) tuples which
+        can be used to reconstruct this object.
+        If destructive flag is set to True, will
+        be somewhat faster, and this object will be
+        emptied by the end.
+        """
+        adds = []
+        
     def __add__(self, other):
         """
         Concatenates this bindings object with another.
@@ -134,29 +172,23 @@ class lambda_bind(object):
         return result
     def __repr__(self):
         result = 'lambda_bind(' + \
-                 repr([self.named, self.indexed, self._adds]) + ')'
+                 repr(self.flatten()) + ')'
         return result
     def __bool__(self):
         return len(self) != 0
     def __eq__(self, other):
+        """
+        Checks for equality.
+        Instead of doing a full equality check,
+        will check the hash internal state.
+        """
         if self is other:return True
         return isinstance(other, lambda_bind) and \
-               self._adds == other._adds and \
-               self.named == other.named and \
-               self.indexed == other.indexed
+               self._hash == other._hash
     def __ne__(self, other):
         return not (self == other)
     def __hash__(self):
-        named_hash = hash(tuple(map(
-            (lambda d:tuple(d.items())),
-            self.named.maps
-            )))
-        return hash((
-            lambda_bind,
-            named_hash,
-            tuple(self.indexed),
-            tuple(self._adds)
-            ))
+        return hash(tuple(self._hash))
 
 class lambda_var(object):
     """
@@ -198,7 +230,6 @@ class lambda_var(object):
         if isinstance(self.var_name, str):
             return self
         if name_iter is None:
-            import itertools
             return iter(_name_generator())
         if name_stack is None:
             name_stack = []
@@ -248,8 +279,96 @@ class lambda_call(object):
       \lambda x. x x
     The sub-expression "x x" would be represented by a lambda_call,
     since it is a yet unevaluated function call.
+
+    One instance will only represent a single function call:
+    func(arg) for some func, arg.
+    Nesting these is capable of representing any call tree.
+    While we could compress the tree, it is currently not
+    demanded for performance, so this single pair implementation
+    is good enough.
     """
-    pass # TODO
+    def __init__(self, func, arg):
+        """
+        Initialize this object to represent the function call
+        func(arg)
+        """
+        self.func = func
+        self.arg = arg
+        self._hash = hash((lambda_call, func, arg))
+    def __hash__(self):
+        return self._hash
+    def __eq__(self):
+        if self is other:return True
+        return isinstance(other, lambda_call) and \
+               hash(self) == hash(other) and \
+               self.func == other.func and \
+               self.arg == other.arg
+    def __ne__(self):
+        return not (self == other)
+    def __str__(self):
+        """
+        Returns a LaTeX compatible string unambiguiously
+        representing this function call,
+        and which may be passed to parse_lambda to reconstruct it.
+        """
+        return '(' + str(self.func) + ' ' + str(self.arg) + ')'
+    def __repr__(self):
+        return 'lambda_call(' + repr(self.func) + \
+               ', ' + repr(self.arg) + ')'
+    def to_named(self, name_iter=None, name_stack=None):
+        """
+        Converts this expression and all sub-expressions recursively
+        to use the named form, and returns the new function.
+        If already in named form, does nothing.
+
+        Naming scheme may change unexpectedly;
+        current implementation uses a counter and hexadecimal.
+        """
+        if name_iter is None:
+            return iter(_name_generator())
+        if name_stack is None:
+            name_stack = []
+        return lambda_call(
+            self.func.to_named(name_iter, name_stack),
+            self.arg.to_named(name_iter, name_stack)
+            )
+    def to_indexed(self, name_stack=None):
+        """
+        Converts this expression and all sub-expressions recursively
+        to use De Bruijn indexing, and returns the new function.
+        If already in De Bruijn indexed form, does nothing.
+        """
+        if name_stack is None:
+            name_stack = []
+        return lambda_call(
+            self.func.to_indexed(name_stack),
+            self.arg.to_indexed(name_stack)
+            )
+    def evaluate_now(self, binds=None):
+        """
+        Force full evaluation now, and return the evaluated lambda expression.
+        """
+        # immediate evaluation of function and argument
+        func = self.func.evaluate_now(binds)
+        arg = self.arg.evaluate_now(binds)
+        # and then call, but don't evaluate yet
+        # if this is unable to evaluate further, it will just
+        # wrap in a lambda_call object
+        result = func.call(arg, binds)
+        # prevent infinite recursion by stopping when nothing changes
+        if result == self:
+            return self
+        # keep going and recursively evaluate
+        # bindings were already processed, so no bindings done here
+        return result.evaluate_now()
+    def call(self, arg, binds):
+        """
+        Call this value with some other value.
+        """
+        result = lambda_call(self, arg)
+        if binds:
+            result = lambda_subs(result, binds, len(binds))
+        return result
 
 class lambda_subs(object):
     """
@@ -323,7 +442,6 @@ class lambda_func(object):
         if isinstance(self.var_name, str):
             return self
         if name_iter is None:
-            import itertools
             return iter(_name_generator())
         if name_stack is None:
             name_stack = []
