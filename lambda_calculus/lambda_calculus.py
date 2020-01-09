@@ -15,6 +15,16 @@ Important usage notes:
   we do not currently support direct evaluation of the De Bruijn forms.
 """
 
+def _name_generator():
+    """
+    The current name generator, which is an iterable.
+    Will generate the same sequence every time,
+    but may change in future versions.
+    In the current implementation, uses a counter and converts
+    the numbers to hexadecimal.
+    """
+    return map((lambda n:format(n,'X')), itertools.count())
+
 class lambda_bind(object):
     """
     Represents a collection of variable bindings.
@@ -31,6 +41,13 @@ class lambda_bind(object):
     will cause a namespace collision,
     and we need the innermost scope to take priority,
     but not discard the outer scope's variable value once the inner scope ends.
+
+    Hash and comparison are implemented, but not considered a common use case,
+    so they are not highly optimized. If it turns out that hashing or
+    equality is a significant performance issue, we will change the code
+    with a trade-off: hash intermediate values will be part of the state
+    and all update operations will take slightly more work to also update
+    the hash values, and thus the hash method becomes O(1) instead of O(N).
     """
     def __init__(self, state=None):
         """
@@ -46,11 +63,16 @@ class lambda_bind(object):
     def __getitem__(self, index):
         """
         Get the bound value for a named or indexed variable.
+
+        If fails, raises a KeyError.
         """
-        if isinstance(index, str):
-            return self.named[index]
-        else:
-            return self.indexed[-index]
+        try:
+            if isinstance(index, str):
+                return self.named[index]
+            else:
+                return self.indexed[-index]
+        except IndexError as exc:
+            raise KeyError(exc)
     def append(self, index, value):
         """
         Add a new entry for a named or indexed variable.
@@ -116,13 +138,106 @@ class lambda_bind(object):
         return result
     def __bool__(self):
         return len(self) != 0
+    def __eq__(self, other):
+        if self is other:return True
+        return isinstance(other, lambda_bind) and \
+               self._adds == other._adds and \
+               self.named == other.named and \
+               self.indexed == other.indexed
+    def __ne__(self, other):
+        return not (self == other)
+    def __hash__(self):
+        named_hash = hash(tuple(map(
+            (lambda d:tuple(d.items())),
+            self.named.maps
+            )))
+        return hash((
+            lambda_bind,
+            named_hash,
+            tuple(self.indexed),
+            tuple(self._adds)
+            ))
 
 class lambda_var(object):
     """
     Represents an occurence of a single variable.
     Stores the variable name, or an integer if De Bruijn indexing is used
     """
-    pass # TODO
+    def __init__(self, var_name):
+        """
+        Construct the variable by name or De Bruijn index.
+        """
+        self.var_name = var_name
+        self._hash = hash((lambda_var, var_name))
+    def __hash__(self):
+        return self._hash
+    def __eq__(self, other):
+        """
+        Checks if the other is also a variable with the same name.
+        """
+        if self is other:return True
+        return isinstance(other, lambda_var) and \
+               hash(self) == hash(other) and \
+               self.var_name == other.var_name
+    def __ne__(self, other):
+        return not (self == other)
+    def __str__(self):
+        """
+        Returns the variable name.
+        """
+        return self.var_name
+    def __repr__(self):
+        return 'lambda_var(' + repr(var_name) + ')'
+    def to_named(self, name_iter=None, name_stack=None):
+        """
+        Converts this variable to a named form.
+
+        Naming scheme may change unexpectedly;
+        current implementation uses a counter and hexadecimal.
+        """
+        if isinstance(self.var_name, str):
+            return self
+        if name_iter is None:
+            import itertools
+            return iter(_name_generator())
+        if name_stack is None:
+            name_stack = []
+        new_name = name_stack[-self.var_name]
+        return lambda_var(new_name)
+    def to_indexed(self, name_stack=None):
+        """
+        Converts this variable to De Bruijn indexed form.
+        """
+        if isinstance(self.var_name, int):
+            return self
+        if name_stack is None:
+            name_stack = []
+        new_name = len(name_stack) - name_stack.index(self.var_name)
+        return lambda_var(new_name)
+    def evaluate_now(self, binds=None):
+        """
+        Force full evaluation now, and return the evaluated lambda expression.
+        """
+        if not binds:
+            return self
+        try:
+            # can we substitute?
+            result = binds[self.var_name]
+            # we may not be done yet, keep going recursively
+            return result.evaluate_now(binds)
+        except KeyError:
+            # no substitution possible, that's it
+            return self
+    def call(self, arg, binds):
+        """
+        Call this value with some other value.
+        Substitutions are deferred.
+        """
+        result = self
+        result = lambda_call(result, arg)
+        if binds:
+            result = lambda_subs(result, binds, len(binds))
+        return result
 
 class lambda_call(object):
     """
@@ -163,6 +278,7 @@ class lambda_func(object):
         """
         self.var_name = var_name
         self.expr = expr
+        self._hash = hash((lambda_func, var_name, expr))
     def __eq__(self, other):
         """
         Performs a strict equality check,
@@ -170,8 +286,8 @@ class lambda_func(object):
         Will not consider alpha-converted variants to be equal.
         """
         if self is other:return True
-        return hasattr(other, 'var_name') and \
-               hasattr(other, 'expr') and \
+        return isinstance(other, lambda_func) and \
+               hash(self) == hash(other) and \
                self.var_name == other.var_name and \
                self.expr == other.expr
     def __ne__(self, other):
@@ -195,20 +311,41 @@ class lambda_func(object):
                  repr(self.var_name) + ', ' + \
                  repr(self.expr) + ')'
         return result
-    def to_named(self):
+    def to_named(self, name_iter=None, name_stack=None):
         """
         Converts this function and all sub-expressions recursively
         to use the named form, and returns the new function.
         If already in named form, does nothing.
+
+        Naming scheme may change unexpectedly;
+        current implementation uses a counter and hexadecimal.
         """
-        pass # TODO
-    def to_indexed(self):
+        if isinstance(self.var_name, str):
+            return self
+        if name_iter is None:
+            import itertools
+            return iter(_name_generator())
+        if name_stack is None:
+            name_stack = []
+        new_name = next(name_iter)
+        name_stack.append(new_name)
+        result = lambda_func(new_name, expr.to_named(name_iter, name_stack))
+        name_stack.pop()
+        return result
+    def to_indexed(self, name_stack=None):
         """
         Converts this function and all sub-expressions recursively
         to use De Bruijn indexing, and returns the new function.
         If already in De Bruijn indexed form, does nothing.
         """
-        pass # TODO
+        if self.var_name is None:
+            return self
+        if name_stack is None:
+            name_stack = []
+        name_stack.append(self.var_name)
+        result = lambda_func(None, expr.to_indexed(name_iter, name_stack))
+        name_stack.pop()
+        return result
     def evaluate_now(self, binds=None):
         """
         Force full evaluation now, and return the evaluated lambda expression.
