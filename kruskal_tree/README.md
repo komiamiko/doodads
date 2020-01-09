@@ -4,6 +4,8 @@ Have you heard of TREE(3)? It is a stupidly large number, far too large for a hu
 
 Of course, we have no business constructing the number, but we can have fun making trees and playing the tree game.
 
+*This collection is named after Kruskal because it's Kruskal's Tree Theorem that proves the tree game always ends, though the idea of the trees and original tree/TREE functions were proposed by Harvey Friedman, so perhaps it would be more fitting to name this collection after Friedman. It's Friedman's trees and Kruskal's proof of termination.*
+
 Relevant files:
 
 1. `kruskal_tree.py` for playing with trees in general

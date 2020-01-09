@@ -1,6 +1,6 @@
 #  Ordinals and Cardinals
 
-Ordinals and cardinals are rather different, though they are related. They both contain the more well behaved finite objects and the stranger infinitely large "transfinite" objects.
+[Ordinals](https://en.wikipedia.org/wiki/Ordinal_number) and [cardinals](https://en.wikipedia.org/wiki/Cardinal_number) are rather different, though they are related. They both contain the more well behaved finite objects and the stranger infinitely large "transfinite" objects.
 
 ## I just want programs
 
@@ -8,7 +8,7 @@ Sure.
 
 Relevant files:
 
-- `ordinal.py` - library for working with ordinals up to the Feferman–Schütte ordinal
+- `ordinal.py` - library for working with ordinals up to the Feferman–Schütte ordinal (usually denoted **φ(1, 0, 0)** or **Γ₀**). Includes comparison, arithmetic, 2-argument Veblen function, fundamental sequences, and fast growing hierarchy expander.
 
 ## Introduction to ordinals
 
@@ -168,7 +168,7 @@ This is somewhat like how if you are building a tower of blocks, the tower looks
 
 #### Up to ω + ω + ω
 
-We can take **ω + ω** and add another **ω** to get **ω + ω + ω**. 
+We can take **ω + ω** and add another **ω** to get **ω + ω + ω**.
 
 > ***ω + ω + ω** = A0 < A1 < A2 < A3 < ⋯ < B0 < B1 < B2 < B3 < ⋯ < C0 < C1 < C2 < C3 < ⋯*
 
@@ -213,7 +213,7 @@ This order type actually does correspond to something meaningful. If we take all
 < (1, 0) < (1, 1) < (1, 2) < (1, 3) < ⋯
 < (2, 0) < (2, 1) < (2, 2) < (2, 3) < ⋯
 < (3, 0) < (3, 1) < (3, 2) < (3, 3) < ⋯
-  ⋮        ⋮        ⋮        ⋮        ⋱ 
+  ⋮        ⋮        ⋮        ⋮        ⋱
 ```
 
 If this grid is a little scary, just remember, it's *ω* copies of **ω**.
@@ -237,7 +237,7 @@ This is the one time you'll see a "matchstick diagram". They're pretty but usual
 < (1, 0) < (1, 1) < (1, 2) < (1, 3) < ⋯
 < (2, 0) < (2, 1) < (2, 2) < (2, 3) < ⋯
 < (3, 0) < (3, 1) < (3, 2) < (3, 3) < ⋯
-  ⋮        ⋮        ⋮        ⋮        ⋱ 
+  ⋮        ⋮        ⋮        ⋮        ⋱
 < (0, 0, 0) < (0, 0, 1) < (0, 0, 2) < (0, 0, 3) < ⋯
 < (0, 1, 0) < (0, 1, 1) < (0, 1, 2) < (0, 1, 3) < ⋯
 < (0, 2, 0) < (0, 2, 1) < (0, 2, 2) < (0, 2, 3) < ⋯
