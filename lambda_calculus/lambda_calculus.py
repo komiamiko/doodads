@@ -2,12 +2,18 @@
 Small library for working with very pure functional systems,
 especially within the lambda calculus.
 
-Note: while the De Bruijn indexed form is a useful normal form,
-we do not currently support direct evaluation of the De Bruijn forms.
+Important usage notes:
+- The lambda calculus is Turing complete and capable of arbitrary
+  computation, including non-halting programs and wasting all your
+  computing resources. If this is being used seriously instead of
+  as a playground ie. on a server, ensure you have strict safeguards.
+- Lazy evaluation is used for all the lambda objects.
+  This behaviour is hidden to the typical user, however, if you are
+  diving deeper and working with the lambda objects, know that
+  most computation is deferred until you call .evaluate_now()
+- While the De Bruijn indexed form is a useful normal form,
+  we do not currently support direct evaluation of the De Bruijn forms.
 """
-
-owns_global_namespace = __name__ == '__main__'
-module_prefix = '' if owns_global_namespace else __name__ + '.'
 
 class lambda_bind(object):
     """
@@ -26,14 +32,17 @@ class lambda_bind(object):
     and we need the innermost scope to take priority,
     but not discard the outer scope's variable value once the inner scope ends.
     """
-    def __init__(self):
+    def __init__(self, state=None):
         """
         Initialize the bindings object with no variables bound.
+        If state is given, initializes using it instead.
         """
         import collections
         self.named = collections.ChainMap()
         self.indexed = []
         self._adds = []
+        if state is not None:
+            self.named, self.indexed, self._adds = state
     def __getitem__(self, index):
         """
         Get the bound value for a named or indexed variable.
@@ -73,6 +82,40 @@ class lambda_bind(object):
         """
         while len(self) > n:
             self.pop()
+    def __add__(self, other):
+        """
+        Concatenates this bindings object with another.
+        The bindings for the other object (right operand)
+        will come after the bindings for this object (left operand),
+        so the new newest binding is the newest binding
+        of the right operand.
+        """
+        import collections
+        named = collections.ChainMap(*other.named.maps, *self.named.maps)
+        indexed = self.indexed + other.indexed
+        _adds = self._adds + other._adds
+        return lambda_bind([named, indexed, _adds])
+    def __str__(self):
+        """
+        Generates a substitution list.
+        By convention, square brackets are used to surround the substitutions,
+        and substitutions are written as NAME := VALUE
+        Indexed values just use the value instead.
+        """
+        bits = []
+        for k, v in self.named:
+            bits.append(str(k) + ' := ' + str(v))
+        for v in self.indexed:
+            bits.append(str(v))
+        result = ', '.join(bits)
+        result = '[' + result + ']'
+        return result
+    def __repr__(self):
+        result = 'lambda_bind(' + \
+                 repr([self.named, self.indexed, self._adds]) + ')'
+        return result
+    def __bool__(self):
+        return len(self) != 0
 
 class lambda_var(object):
     """
@@ -93,10 +136,10 @@ class lambda_call(object):
     """
     pass # TODO
 
-class lambda_lazy(object):
+class lambda_subs(object):
     """
-    Represents a partial evaluation of an expression with certain substitutions.
-    Called a lazy object because substitutions don't happen until we get to the variables.
+    Represents an expression with substitutions,
+    where the substitutions have yet to be evaluated.
     Behaves like the other types, when needed.
     Simplifies implementation and improves performance.
     """
@@ -148,29 +191,34 @@ class lambda_func(object):
         result = '(' + result + ')'
         return result
     def __repr__(self):
-        result = module_prefix + 'lambda_func(' + \
+        result = 'lambda_func(' + \
                  repr(self.var_name) + ', ' + \
                  repr(self.expr) + ')'
         return result
     def to_named(self):
         """
         Converts this function and all sub-expressions recursively
-        to use the named form.
-        
+        to use the named form, and returns the new function.
+        If already in named form, does nothing.
         """
         pass # TODO
     def to_indexed(self):
         """
         Converts this function and all sub-expressions recursively
-        to use De Bruijn indexing.
+        to use De Bruijn indexing, and returns the new function.
+        If already in De Bruijn indexed form, does nothing.
         """
         pass # TODO
-    def evaluate_now(self):
+    def evaluate_now(self, binds=None):
         """
-        Force evaluation now, and return the evaluated lambda expression.
-        For types other than lambda_lazy, will just return itself.
+        Force full evaluation now, and return the evaluated lambda expression.
         """
-        return self
+        if not binds:
+            return self
+        return lambda_func(
+            self.var_name,
+            self.call(lambda_var(self.var_name), binds).evaluate_now()
+            )
     def call(self, arg, binds):
         """
         Call this value with some other value.
@@ -188,7 +236,8 @@ class lambda_func(object):
         """
         if self.var_name is None:
             import warnings
-            warnings.warn('Function evaluation must first convert to named form. Consider saving the named form.')
+            warnings.warn('Function evaluation must first convert to named form. ' \
+                          'Consider saving the named form to remove the need to convert it again every time the function is called.')
             self = self.to_named()
         for arg in args:
             self = self.call(arg, lambda_bind())
