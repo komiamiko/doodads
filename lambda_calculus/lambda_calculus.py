@@ -38,6 +38,7 @@ def _name_generator():
     In the current implementation, uses a counter and converts
     the numbers to hexadecimal.
     """
+    import itertools
     return map((lambda n:format(n,'X')), itertools.count())
 
 class lambda_bind(object):
@@ -230,10 +231,8 @@ class lambda_expr(object):
         Naming scheme may change unexpectedly;
         current implementation uses a counter and hexadecimal.
         """
-        if isinstance(self.var_name, str):
-            return self
         if name_iter is None:
-            return iter(_name_generator())
+            name_iter = iter(_name_generator())
         if name_stack is None:
             name_stack = []
         return self._to_named(name_iter, name_stack)
@@ -291,7 +290,7 @@ class lambda_var(lambda_expr):
         """
         Returns the variable name.
         """
-        return self.var_name
+        return str(self.var_name)
     def __repr__(self):
         return 'lambda_var(' + repr(self.var_name) + ')'
     def _to_named(self, name_iter, name_stack):
@@ -517,6 +516,8 @@ class lambda_func(lambda_expr):
         self.var_name = var_name
         self.expr = expr
         self._hash = hash((lambda_func, var_name, expr))
+    def __hash__(self):
+        return self._hash
     def __eq__(self, other):
         """
         Performs a strict equality check,
@@ -557,7 +558,7 @@ class lambda_func(lambda_expr):
             return self
         new_name = next(name_iter)
         name_stack.append(new_name)
-        result = lambda_func(new_name, expr.to_named(name_iter, name_stack))
+        result = lambda_func(new_name, self.expr.to_named(name_iter, name_stack))
         name_stack.pop()
         return result
     def _to_indexed(self, name_stack):
@@ -567,7 +568,7 @@ class lambda_func(lambda_expr):
         if self.var_name is None:
             return self
         name_stack.append(self.var_name)
-        result = lambda_func(None, expr.to_indexed(name_iter, name_stack))
+        result = lambda_func(None, self.expr.to_indexed(name_stack))
         name_stack.pop()
         return result
     def _evaluate_now(self, binds):
