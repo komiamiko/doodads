@@ -141,7 +141,15 @@ class lambda_bind(object):
         emptied by the end.
         """
         adds = []
-        
+        while self:
+            index = self._adds[-1]
+            value = self.pop()
+            adds.append((index, value))
+        adds = adds[::-1]
+        if not destructive:
+            for index, value in adds:
+                self.append(index, value)
+        return adds
     def __add__(self, other):
         """
         Concatenates this bindings object with another.
@@ -155,6 +163,20 @@ class lambda_bind(object):
         indexed = self.indexed + other.indexed
         _adds = self._adds + other._adds
         return lambda_bind([named, indexed, _adds])
+    def __iadd__(self, other):
+        """
+        Concatenates this bindings object with another,
+        in place. See docs for __add__ for more details
+        on how the concatenation operation behaves.
+        """
+        import collections
+        named = collections.ChainMap(*other.named.maps, *self.named.maps)
+        indexed = self.indexed + other.indexed
+        _adds = self._adds + other._adds
+        self.named = named
+        self.indexed = indexed
+        self._adds = _adds
+        return self
     def __str__(self):
         """
         Generates a substitution list.
@@ -190,7 +212,59 @@ class lambda_bind(object):
     def __hash__(self):
         return hash(tuple(self._hash))
 
-class lambda_var(object):
+class lambda_expr(object):
+    """
+    Base class for lambda expressions.
+    Acts in some ways as an abstract base class
+    by declaring functions to be implemented.
+    Also provides some common "default" implementations
+    of functions and wrappers to simplify child class
+    implementations.
+    """
+    def to_named(self, name_iter=None, name_stack=None):
+        """
+        Converts this lambda expression to a named form.
+
+        Actually a wrapper around ._to_named(name_iter, name_stack)
+
+        Naming scheme may change unexpectedly;
+        current implementation uses a counter and hexadecimal.
+        """
+        if isinstance(self.var_name, str):
+            return self
+        if name_iter is None:
+            return iter(_name_generator())
+        if name_stack is None:
+            name_stack = []
+        return self._to_named(name_iter, name_stack)
+    def to_indexed(self, name_stack=None):
+        """
+        Converts this lambda expression to De Bruijn indexed form.
+
+        Actually a wrapper around ._to_indexed(name_stack)
+        """
+        if name_stack is None:
+            name_stack = []
+        return self._to_indexed(name_stack)
+    def evaluate_now(self, binds=None):
+        """
+        Force full evaluation now, and return the evaluated lambda expression.
+
+        Actually a wrapper around ._evaluate_now(binds)
+        """
+        if binds is None:
+            binds = lambda_bind()
+        return self._evaluate_now(binds)
+    def call(self, arg, binds=None):
+        """
+        Call this value with some other value.
+        """
+        result = lambda_call(self, arg)
+        if binds:
+            result = lambda_subs(result, binds, len(binds))
+        return result
+    
+class lambda_var(lambda_expr):
     """
     Represents an occurence of a single variable.
     Stores the variable name, or an integer if De Bruijn indexing is used
@@ -219,35 +293,24 @@ class lambda_var(object):
         """
         return self.var_name
     def __repr__(self):
-        return 'lambda_var(' + repr(var_name) + ')'
-    def to_named(self, name_iter=None, name_stack=None):
+        return 'lambda_var(' + repr(self.var_name) + ')'
+    def _to_named(self, name_iter, name_stack):
         """
-        Converts this variable to a named form.
-
-        Naming scheme may change unexpectedly;
-        current implementation uses a counter and hexadecimal.
+        Underlying function for the wrapped .to_named()
         """
-        if isinstance(self.var_name, str):
-            return self
-        if name_iter is None:
-            return iter(_name_generator())
-        if name_stack is None:
-            name_stack = []
         new_name = name_stack[-self.var_name]
         return lambda_var(new_name)
-    def to_indexed(self, name_stack=None):
+    def _to_indexed(self, name_stack):
         """
-        Converts this variable to De Bruijn indexed form.
+        Underlying function for the wrapped .to_indexed()
         """
         if isinstance(self.var_name, int):
             return self
-        if name_stack is None:
-            name_stack = []
         new_name = len(name_stack) - name_stack.index(self.var_name)
         return lambda_var(new_name)
-    def evaluate_now(self, binds=None):
+    def _evaluate_now(self, binds):
         """
-        Force full evaluation now, and return the evaluated lambda expression.
+        Underlying function for the wrapped .evaluate_now()
         """
         if not binds:
             return self
@@ -259,18 +322,8 @@ class lambda_var(object):
         except KeyError:
             # no substitution possible, that's it
             return self
-    def call(self, arg, binds):
-        """
-        Call this value with some other value.
-        Substitutions are deferred.
-        """
-        result = self
-        result = lambda_call(result, arg)
-        if binds:
-            result = lambda_subs(result, binds, len(binds))
-        return result
 
-class lambda_call(object):
+class lambda_call(lambda_expr):
     """
     Represents a function call which was declared but not evaluated.
     The function may or may not be a lambda_func object.
@@ -315,6 +368,86 @@ class lambda_call(object):
     def __repr__(self):
         return 'lambda_call(' + repr(self.func) + \
                ', ' + repr(self.arg) + ')'
+    def _to_named(self, name_iter, name_stack):
+        """
+        Underlying function for the wrapped .to_named()
+        """
+        return lambda_call(
+            self.func.to_named(name_iter, name_stack),
+            self.arg.to_named(name_iter, name_stack)
+            )
+    def _to_indexed(self, name_stack):
+        """
+        Underlying function for the wrapped .to_indexed()
+        """
+        return lambda_call(
+            self.func.to_indexed(name_stack),
+            self.arg.to_indexed(name_stack)
+            )
+    def _evaluate_now(self, binds):
+        """
+        Underlying function for the wrapped .evaluate_now()
+        """
+        # immediate evaluation of function and argument
+        func = self.func.evaluate_now(binds)
+        arg = self.arg.evaluate_now(binds)
+        # and then call, but don't evaluate yet
+        # if this is unable to evaluate further, it will just
+        # wrap in a lambda_call object
+        result = func.call(arg, binds)
+        # prevent infinite recursion by stopping when nothing changes
+        if result == self:
+            return self
+        # keep going and recursively evaluate
+        # bindings were already processed, so no bindings done here
+        return result.evaluate_now()
+
+class lambda_subs(lambda_expr):
+    """
+    Represents an expression with substitutions,
+    where the substitutions have yet to be evaluated.
+    Behaves like the other types, when needed.
+    Simplifies implementation and improves performance.
+    """
+    def __init__(self, expr, binds, mark=None):
+        """
+        Represents expr with the given substitutions,
+        where the immediately outside scope uses only
+        the first <mark> bindings.
+        After evaluation, all bindings after the mark
+        will be removed.
+        """
+        if mark is None:
+            mark = len(binds)
+        self.expr = expr
+        self.binds = binds
+        self.mark = mark
+        self._hash = hash((expr, binds, mark))
+    def __hash__(self):
+        return self._hash
+    def __eq__(self, other):
+        if self is other:return True
+        return isinstance(other, lambda_subs) and \
+               hash(self) == hash(other) and \
+               self.mark == other.mark and \
+               self.binds == other.binds and \
+               self.expr == other.expr
+    def __ne__(self, other):
+        return not (self == other)
+    def __str__(self):
+        """
+        Returns a LaTeX compatible string representing
+        this expression with substitution.
+        This is not allowed by the parser.
+        Be warned as well that ordered substitutions
+        and multiple substitutions are not standard
+        in mathematics.
+        """
+        return str(self.expr) + str(self.binds)
+    def __repr__(self):
+        return 'lambda_subs(' + repr(self.expr) + \
+               ', ' + repr(self.binds) + \
+               ', ' + repr(self.mark) + ')'
     def to_named(self, name_iter=None, name_stack=None):
         """
         Converts this expression and all sub-expressions recursively
@@ -332,54 +465,40 @@ class lambda_call(object):
             self.func.to_named(name_iter, name_stack),
             self.arg.to_named(name_iter, name_stack)
             )
-    def to_indexed(self, name_stack=None):
+    def _to_named(self, name_iter, name_stack):
         """
-        Converts this expression and all sub-expressions recursively
-        to use De Bruijn indexing, and returns the new function.
-        If already in De Bruijn indexed form, does nothing.
+        Would normally convert to named form,
+        but not supported for a substitution object.
         """
-        if name_stack is None:
-            name_stack = []
-        return lambda_call(
-            self.func.to_indexed(name_stack),
-            self.arg.to_indexed(name_stack)
-            )
-    def evaluate_now(self, binds=None):
+        raise TypeError('Cannot refactor a substitution object' \
+                        '(of type lambda_subs) to named form')
+    def _to_indexed(self, name_stack):
         """
-        Force full evaluation now, and return the evaluated lambda expression.
+        Would normally convert to indexed form,
+        but not supported for a substitution object.
         """
-        # immediate evaluation of function and argument
-        func = self.func.evaluate_now(binds)
-        arg = self.arg.evaluate_now(binds)
-        # and then call, but don't evaluate yet
-        # if this is unable to evaluate further, it will just
-        # wrap in a lambda_call object
-        result = func.call(arg, binds)
-        # prevent infinite recursion by stopping when nothing changes
-        if result == self:
-            return self
-        # keep going and recursively evaluate
-        # bindings were already processed, so no bindings done here
-        return result.evaluate_now()
-    def call(self, arg, binds):
+        raise TypeError('Cannot refactor a substitution object' \
+                        '(of type lambda_subs) to De Bruijn indexed form')
+    def _evaluate_now(self, binds):
         """
-        Call this value with some other value.
+        Force full evaluation now, and return the
+        evaluated lambda expression.
+
+        Since this object is a substitution object,
+        it handles a lot of the hard work.
         """
-        result = lambda_call(self, arg)
-        if binds:
-            result = lambda_subs(result, binds, len(binds))
+        # we must append our bindings
+        mark = len(binds) + self.mark
+        binds += self.binds
+        # apply substitutions to the expression
+        result = self.expr.evaluate_now(binds)
+        # unroll back to the mark to remove
+        # substitutions that have gone out of scope
+        binds.keep_first(mark)
+        # return result
         return result
 
-class lambda_subs(object):
-    """
-    Represents an expression with substitutions,
-    where the substitutions have yet to be evaluated.
-    Behaves like the other types, when needed.
-    Simplifies implementation and improves performance.
-    """
-    pass # TODO
-
-class lambda_func(object):
+class lambda_func(lambda_expr):
     """
     Represents a unary function in the lambda calculus.
     The actual data it stores are:
@@ -430,43 +549,30 @@ class lambda_func(object):
                  repr(self.var_name) + ', ' + \
                  repr(self.expr) + ')'
         return result
-    def to_named(self, name_iter=None, name_stack=None):
+    def _to_named(self, name_iter, name_stack):
         """
-        Converts this function and all sub-expressions recursively
-        to use the named form, and returns the new function.
-        If already in named form, does nothing.
-
-        Naming scheme may change unexpectedly;
-        current implementation uses a counter and hexadecimal.
+        Underlying function for the wrapped .to_named()
         """
         if isinstance(self.var_name, str):
             return self
-        if name_iter is None:
-            return iter(_name_generator())
-        if name_stack is None:
-            name_stack = []
         new_name = next(name_iter)
         name_stack.append(new_name)
         result = lambda_func(new_name, expr.to_named(name_iter, name_stack))
         name_stack.pop()
         return result
-    def to_indexed(self, name_stack=None):
+    def _to_indexed(self, name_stack):
         """
-        Converts this function and all sub-expressions recursively
-        to use De Bruijn indexing, and returns the new function.
-        If already in De Bruijn indexed form, does nothing.
+        Underlying function for the wrapped .to_indexed()
         """
         if self.var_name is None:
             return self
-        if name_stack is None:
-            name_stack = []
         name_stack.append(self.var_name)
         result = lambda_func(None, expr.to_indexed(name_iter, name_stack))
         name_stack.pop()
         return result
-    def evaluate_now(self, binds=None):
+    def _evaluate_now(self, binds):
         """
-        Force full evaluation now, and return the evaluated lambda expression.
+        Underlying function for the wrapped .evaluate_now()
         """
         if not binds:
             return self
@@ -481,8 +587,8 @@ class lambda_func(object):
         if self.var_name is None:
             raise TypeError('Direct call with De Bruijn indexing is not supported. Please convert to named first.')
         unroll_to = len(binds)
-        binds.append(self.var_name, args)
-        return lambda_lazy(self.expr, binds, unroll_to)
+        binds.append(self.var_name, arg)
+        return lambda_subs(self.expr, binds, unroll_to)
     def __call__(self, *args):
         """
         For convenience: call the function with some arguments
@@ -495,6 +601,6 @@ class lambda_func(object):
                           'Consider saving the named form to remove the need to convert it again every time the function is called.')
             self = self.to_named()
         for arg in args:
-            self = self.call(arg, lambda_bind())
+            self = self.call(arg)
         self = self.evaluate_now()
         return self
