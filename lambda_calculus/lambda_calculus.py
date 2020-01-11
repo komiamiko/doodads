@@ -72,10 +72,8 @@ class lambda_bind(object):
         self.named = collections.ChainMap()
         self.indexed = []
         self._adds = []
-        self._hash = [hash((v, lambda_bind)) for v in _hash_mul]
-        if adds is not None:
-            for index, value in adds:
-                self.append(index, value)
+        self._hash = [hash((v, lambda_bind)) & _hash_mask for v in _hash_mul]
+        self += adds
     def __getitem__(self, index):
         """
         Get the bound value for a named or indexed variable.
@@ -159,24 +157,26 @@ class lambda_bind(object):
         so the new newest binding is the newest binding
         of the right operand.
         """
-        import collections
-        named = collections.ChainMap(*other.named.maps, *self.named.maps)
-        indexed = self.indexed + other.indexed
-        _adds = self._adds + other._adds
-        return lambda_bind([named, indexed, _adds])
+        # make a new bindings object and add in all the data
+        result = lambda_bind()
+        result += self
+        result += other
+        return result
     def __iadd__(self, other):
         """
         Concatenates this bindings object with another,
         in place. See docs for __add__ for more details
         on how the concatenation operation behaves.
         """
-        import collections
-        named = collections.ChainMap(*other.named.maps, *self.named.maps)
-        indexed = self.indexed + other.indexed
-        _adds = self._adds + other._adds
-        self.named = named
-        self.indexed = indexed
-        self._adds = _adds
+        # quickly get past zero-like cases
+        if not other:
+            return self
+        # flatten down a bindings object into a substitution list
+        if isinstance(other, lambda_bind):
+            other = other.flatten()
+        # append every substitution
+        for index, value in other:
+            self.append(index, value)
         return self
     def __str__(self):
         """
@@ -184,6 +184,9 @@ class lambda_bind(object):
         By convention, square brackets are used to surround the substitutions,
         and substitutions are written as NAME := VALUE
         Indexed values just use the value instead.
+        Note that for named substitutions, there may actually be more
+        substitutions with the same variable name,
+        but only the most recent/innermost will be shown.
         """
         bits = []
         for k, v in self.named:
@@ -328,7 +331,7 @@ class lambda_call(lambda_expr):
     The function may or may not be a lambda_func object.
 
     For example, in this lambda expression:
-      \lambda x. x x
+      \\lambda x. x x
     The sub-expression "x x" would be represented by a lambda_call,
     since it is a yet unevaluated function call.
 
@@ -581,10 +584,12 @@ class lambda_func(lambda_expr):
             self.var_name,
             self.call(lambda_var(self.var_name), binds).evaluate_now()
             )
-    def call(self, arg, binds):
+    def call(self, arg, binds=None):
         """
         Call this value with some other value.
         """
+        if binds is None:
+            binds = lambda_bind()
         if self.var_name is None:
             raise TypeError('Direct call with De Bruijn indexing is not supported. Please convert to named first.')
         unroll_to = len(binds)
