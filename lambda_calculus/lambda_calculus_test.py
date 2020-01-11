@@ -140,6 +140,91 @@ class TestInternalState(unittest.TestCase):
 
         self.assertTrue(A == B)
 
+    def test_expr_ops_no_func(self):
+        """
+        Tests operations on lambda expressions
+        WITHOUT involving the lambda_func class.
+        Tests include:
+        - sanity checks
+            ex. x = x
+            ex. x x x =/= x (x x)
+        - see that call with substitution
+          is actually lazy
+            ex. (x x)[x := y] =/= y y
+        - see that substitution is correct
+            ex. (x x)[x := y y] = y y (y y)
+        """
+        from lambda_calculus import lambda_var, lambda_bind
+        
+        # variables are distinguished by name
+
+        # check self equality
+
+        x = lambda_var('x')
+        x_ = lambda_var('x')
+
+        self.assertTrue(x == x)
+        self.assertTrue(hash(x) == hash(x))
+        self.assertTrue(x == x_)
+        self.assertTrue(hash(x) == hash(x_))
+
+        # check non-equality
+
+        y = lambda_var('y')
+
+        self.assertTrue(x != y)
+
+        # check distinctness
+
+        self.assertTrue(len(set(map(lambda_var, ['x', 'y', 'z']))) == 3)
+        self.assertTrue(len(set(map(lambda_var, [1, 2, 3]))) == 3)
+        self.assertTrue(len(set(map(lambda_var, ['x', 'y', 'z', 1, 2, 3]))) == 6)
+        
+        # okay so the equality is probably working just fine
+        # let's build some expressions
+        # we will name them using A for apply ex. AxAxx means x (x x)
+
+        Axx = x.call(x)
+
+        self.assertTrue(x != Axx)
+        self.assertTrue(x.call(x) == Axx)
+
+        Axy = x.call(y)
+
+        self.assertTrue(x.call(y) == Axy)
+        
+        Ayx = y.call(x)
+        Ayy = y.call(y)
+
+        self.assertTrue(len({Axx,Axy,Ayx,Ayy}) == 4)
+
+        AAxxx = Axx.call(x)
+        AxAxx = x.call(Axx)
+
+        self.assertTrue(AAxxx != AxAxx)
+
+        # the expression building is probably fine by now
+        # before we move on we will also check
+        # immediate evaluation with an empty substitution
+
+        for expr in (x, y, Axx, Axy, AAxxx, AxAxx):
+            self.assertTrue(expr == expr.evaluate_now())
+
+        # now we can test lazy substitution
+        # we will write Lx for an expression which ultimately
+        # evaluates to x but is using a lazy wrapper
+
+        x_to_y = lambda_bind([('x', y)])
+        
+        Lyy = x.call(x, binds=x_to_y)
+
+        self.assertTrue(len({Axx, Axy, Ayy, Lyy}) == 4)
+
+        # and verify that the substitution is correct when evaluated
+
+        self.assertTrue(Ayy == Lyy.evaluate_now())
+        self.assertTrue(Ayy == Axx.evaluate_now(binds=x_to_y))
+
 class TestLambdaCompute(unittest.TestCase):
     """
     Test cases focused on performing computations with

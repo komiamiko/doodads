@@ -22,24 +22,51 @@ random = sr()
 # 64-bit hash mask
 _hash_mask = 2**64 - 1
 # multipliers for Rabin hash
-_hash_mul = [random.getrandbits(64) & ~4 | 1 for _ in range(2)]
-# multiplicative inverses mod 2^64
-_hash_mul_inv = [pow(v,2**62-1,2**64) for v in _hash_mul]
+_hash_key = tuple(random.getrandbits(64) for _ in range(2))
 
 # get rid of the random generator now that we don't need it anymore
 del sr
 del random
+
+def _hash_combine(hash_state, value):
+    """
+    Combines a hash state and a single hash value:
+    (S, V) --> S'
+    Modifies the hash state in-place.
+
+    Algorithm parameters:
+    hash state - 128 bits as 2-tuple
+    key - 128 bits as 2-tuple
+    value - 64 bits as single value
+
+    As currently implemented, uses a 2-round generalized
+    Feistel network, backed by Python's built-in hash
+    for tuples, which is expected to have sufficient
+    mixing and nonlinearity properties.
+    The implementation may change at any time.
+    """
+    hash_state[0] ^= hash((hash_state[1], _hash_key[0], value))
+    hash_state[1] ^= hash((hash_state[0], _hash_key[1], value))
+
+def _hash_uncombine(hash_state, value):
+    """
+    Inverts _hash_combine:
+    (S', V) --> S
+    """
+    hash_state[1] ^= hash((hash_state[0], _hash_key[1], value))
+    hash_state[0] ^= hash((hash_state[1], _hash_key[0], value))
 
 def _name_generator():
     """
     The current name generator, which is an iterable.
     Will generate the same sequence every time,
     but may change in future versions.
-    In the current implementation, uses a counter and converts
-    the numbers to hexadecimal.
+    In the current implementation,
+    uses a counter and writes the variable names as
+    x_{n}.
     """
     import itertools
-    return map((lambda n:format(n,'X')), itertools.count())
+    return map((lambda n:'x_{'+str(n)+'}'), itertools.count())
 
 class lambda_bind(object):
     """
@@ -72,7 +99,7 @@ class lambda_bind(object):
         self.named = collections.ChainMap()
         self.indexed = []
         self._adds = []
-        self._hash = [hash((v, lambda_bind)) & _hash_mask for v in _hash_mul]
+        self._hash = [0]*2
         self += adds
     def __getitem__(self, index):
         """
@@ -98,8 +125,7 @@ class lambda_bind(object):
         self._adds.append(index)
         # update hash
         hash_add = hash((index, value))
-        for i in range(len(self._hash)):
-            self._hash[i] = (self._hash[i] * _hash_mul[i] + hash_add) & _hash_mask
+        _hash_combine(self._hash, hash_add)
     def pop(self):
         """
         Remove the most recent entry for a named or indexed variable,
@@ -114,8 +140,7 @@ class lambda_bind(object):
             value = self.indexed.pop()
         # update hash
         hash_add = hash((index, value))
-        for i in range(len(self._hash)):
-            self._hash[i] = ((self._hash[i] - hash_add) * _hash_mul_inv[i]) & _hash_mask
+        _hash_uncombine(self._hash, hash_add)
         # return popped value
         return value
     def __len__(self):
@@ -352,13 +377,13 @@ class lambda_call(lambda_expr):
         self._hash = hash((lambda_call, func, arg))
     def __hash__(self):
         return self._hash
-    def __eq__(self):
+    def __eq__(self, other):
         if self is other:return True
         return isinstance(other, lambda_call) and \
                hash(self) == hash(other) and \
                self.func == other.func and \
                self.arg == other.arg
-    def __ne__(self):
+    def __ne__(self, other):
         return not (self == other)
     def __str__(self):
         """
@@ -396,7 +421,7 @@ class lambda_call(lambda_expr):
         # and then call, but don't evaluate yet
         # if this is unable to evaluate further, it will just
         # wrap in a lambda_call object
-        result = func.call(arg, binds)
+        result = func.call(arg)
         # prevent infinite recursion by stopping when nothing changes
         if result == self:
             return self
