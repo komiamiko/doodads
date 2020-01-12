@@ -305,6 +305,47 @@ class TestInternalState(unittest.TestCase):
         self.assertTrue(K != Kn)
         self.assertTrue(K == Kn.to_indexed())
 
+    def test_string_ops(self):
+        """
+        Check that str and repr work as intended.
+        str is meant to be LaTeX comaptible, but we can't check
+        this cheaply. It is also meant to be able to reconstruct
+        the objects through parse_lambda, though parsing
+        will happen in a separate test.
+        repr should be able to reconstruct the objects exactly.
+        """
+        from lambda_calculus import lambda_var, lambda_func
+
+        # construct the namespace for repr tests
+
+        import lambda_calculus
+        namespace = {name:getattr(lambda_calculus, name) for name in dir(lambda_calculus)}
+
+        # start with an easy test
+        
+        x = lambda_var('x')
+
+        # does it str nicely?
+        str(x)
+
+        # reconstruction test
+        self.assertTrue(eval(repr(x),namespace) == x)
+
+        # use Kxx as an example
+        # this should involve every one of the other types
+        # thus, it's somewhat of a harder test
+        # Kxy = x
+
+        K = lambda_func(None, lambda_func(None, lambda_var(2)))
+
+        AAKxx = K.call(x).call(x)
+
+        # don't throw errors please
+        str(AAKxx)
+
+        # test reconstruction
+        self.assertTrue(eval(repr(AAKxx),namespace) == AAKxx)
+
 class TestLambdaCompute(unittest.TestCase):
     """
     Test cases focused on performing computations with
