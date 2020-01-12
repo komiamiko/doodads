@@ -11,8 +11,12 @@ Important usage notes:
   This behaviour is hidden to the typical user, however, if you are
   diving deeper and working with the lambda objects, know that
   most computation is deferred until you call .evaluate_now()
-- While the De Bruijn indexed form is a useful normal form,
-  we do not currently support direct evaluation of the De Bruijn forms.
+- The De Bruijn indexed form is the canonical form here.
+  It is a useful normal form. Under the current implementation,
+  it will always evaluate correctly, unlike the named form,
+  where name collisions may sometimes cause functions to behave
+  in unexpected ways. For this reason, we strictly forbid
+  directly evaluating the named form.
 """
 
 # pregenerate some random data which will be used to initialize constants
@@ -89,10 +93,6 @@ class lambda_bind(object):
     update operations. This way, the hash operation can be O(1),
     at O(1) extra cost when updating. More specifically, a 128-bit internal
     hash state is maintained, and this is also used for equality checks.
-
-    The current implementation forbids directly evaluating functions
-    using the De Bruijn indexed form, so in normal use,
-    the indexed substitutions will never be used.
     """
     def __init__(self, adds=None):
         """
@@ -612,18 +612,44 @@ class lambda_func(lambda_expr):
         """
         if not binds:
             return self
-        return lambda_func(
+        # take advantage of the already existing
+        # lambda_subs class to take care of helping
+        # to propagate the substitutions
+        alt_expr = lambda_subs(self.expr, binds)
+        # modify binds in-place
+        binds.append(
             self.var_name,
-            self.call(lambda_var(self.var_name), binds).evaluate_now()
+            lambda_var(self.var_name if self.var_name is not None else 1)
             )
+        # we expect lambda_subs to also unroll back the binds
+        alt_expr = alt_expr.evaluate_now()
+        # construct the new altered function
+        result = lambda_func(
+            self.var_name,
+            alt_expr
+            )
+        return result
+    def _require_callable(self):
+        """
+        Ensures that this function can be called without error.
+        If this does any work, will warn, because at call time
+        is not when we should be doing conversion work.
+        """
+        if self.var_name is not None:
+            import warnings
+            warnings.warn('Function evaluation must first convert to indexed form. ' \
+                          'Consider saving the named form to remove the need to convert' \
+                          'it again every time the function is called.',
+                          category=ResourceWarning)
+            self = self.to_indexed()
+        return self
     def call(self, arg, binds=None):
         """
         Call this value with some other value.
         """
         if binds is None:
             binds = lambda_bind()
-        if self.var_name is None:
-            raise TypeError('Direct call with De Bruijn indexing is not supported. Please convert to named first.')
+        self = self._require_callable()
         unroll_to = len(binds)
         binds.append(self.var_name, arg)
         return lambda_subs(self.expr, binds, unroll_to)
@@ -633,11 +659,7 @@ class lambda_func(lambda_expr):
         and correct currying.
         Does whatever conversions are necessary along the way.
         """
-        if self.var_name is None:
-            import warnings
-            warnings.warn('Function evaluation must first convert to named form. ' \
-                          'Consider saving the named form to remove the need to convert it again every time the function is called.')
-            self = self.to_named()
+        self = self._require_callable()
         for arg in args:
             self = self.call(arg)
         self = self.evaluate_now()

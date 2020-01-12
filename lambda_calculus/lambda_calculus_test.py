@@ -235,7 +235,7 @@ class TestInternalState(unittest.TestCase):
 
         # make the identity function
 
-        I = lambda_func('x', lambda_var('x'))
+        I = lambda_func(None, lambda_var(1))
 
         # test that it works as expected
 
@@ -255,34 +255,35 @@ class TestInternalState(unittest.TestCase):
 
         # make another identity function
 
-        Idb = lambda_func(None, lambda_var(1))
+        In = lambda_func('x', lambda_var('x'))
 
         # they aren't intensionally equal yet...
 
-        self.assertTrue(I != Idb)
+        self.assertTrue(I != In)
 
-        # but actually it's just the
-        # De Bruijn indexed form of the other
+        # but actually it's just a
+        # named indexed form of the other
 
-        self.assertTrue(I.to_indexed() == Idb)
+        self.assertTrue(I == In.to_indexed())
 
         # test that .to_named() looks deterministic
 
-        self.assertTrue(Idb.to_named() == Idb.to_named())
+        self.assertTrue(I.to_named() == I.to_named())
 
         # okay, let's try something else
         # let's make the K combinator,
         # defined by
         # Kxy = x
 
-        K = lambda_func('x', lambda_func('y', lambda_var('x')))
+        K = lambda_func(None, lambda_func(None, lambda_var(2)))
 
         # try some examples with it
 
         for x, y in itertools.product(*[[
-            lambda_var('a'),
-            lambda_var('b'),
-            lambda_var('c'),
+            lambda_var('w'),
+            lambda_var('x'),
+            lambda_var('y'),
+            lambda_var('z'),
             I
             ]]*2):
             
@@ -297,37 +298,12 @@ class TestInternalState(unittest.TestCase):
 
             self.assertTrue(x == AAKxy.evaluate_now())
 
-        # this one is actually normally a bug
-        # it's a consequence of the order of substitutions
-        # it is able to happen because there is a variable name conflict
-        # how it happens here:
-        #    (lambda y.x)[x := y] x
-        # -> (lambda y.y) x
-        # -> x
-        # remove this case when a workaround is implemented
+        # also check the named form
 
-        self.assertTrue(
-            K.call(lambda_var('y')).call(lambda_var('x')).evaluate_now() \
-            == lambda_var('x')
-            )
+        Kn = lambda_func('x', lambda_func('y', lambda_var('x')))
 
-        # also check the De Bruijn indexed form
-
-        Kdb = lambda_func(None, lambda_func(None, lambda_var(2)))
-
-        self.assertTrue(K != Kdb)
-        self.assertTrue(K.to_indexed() == Kdb)
-
-        # the current version strictly forbids
-        # directly calling a De Bruijn indexed form
-        # due to some bugs that can happen with
-        # recursion.
-        # actually, it will throw an error,
-        # so we will test for this too
-
-        with self.assertRaises(TypeError):
-
-            Kdb.call(I)
+        self.assertTrue(K != Kn)
+        self.assertTrue(K == Kn.to_indexed())
 
 class TestLambdaCompute(unittest.TestCase):
     """
