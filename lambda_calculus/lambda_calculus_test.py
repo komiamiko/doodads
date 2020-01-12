@@ -225,6 +225,110 @@ class TestInternalState(unittest.TestCase):
         self.assertTrue(Ayy == Lyy.evaluate_now())
         self.assertTrue(Ayy == Axx.evaluate_now(binds=x_to_y))
 
+    def test_func_ops(self):
+        """
+        Test some basic functions and the ability to call functions.
+        Will not use bindings directly.
+        """
+        import itertools
+        from lambda_calculus import lambda_var, lambda_func
+
+        # make the identity function
+
+        I = lambda_func('x', lambda_var('x'))
+
+        # test that it works as expected
+
+        for var_name in 'xyz':
+            v = lambda_var(var_name)
+            AIv = I.call(v)
+
+            # lazy evaluation causes Iv to not
+            # reduce to v yet
+            # thus it should report not equal
+
+            self.assertTrue(v != AIv)
+
+            # but then when we force evaluation...
+
+            self.assertTrue(v == AIv.evaluate_now())
+
+        # make another identity function
+
+        Idb = lambda_func(None, lambda_var(1))
+
+        # they aren't intensionally equal yet...
+
+        self.assertTrue(I != Idb)
+
+        # but actually it's just the
+        # De Bruijn indexed form of the other
+
+        self.assertTrue(I.to_indexed() == Idb)
+
+        # test that .to_named() looks deterministic
+
+        self.assertTrue(Idb.to_named() == Idb.to_named())
+
+        # okay, let's try something else
+        # let's make the K combinator,
+        # defined by
+        # Kxy = x
+
+        K = lambda_func('x', lambda_func('y', lambda_var('x')))
+
+        # try some examples with it
+
+        for x, y in itertools.product(*[[
+            lambda_var('a'),
+            lambda_var('b'),
+            lambda_var('c'),
+            I
+            ]]*2):
+            
+            AAKxy = K.call(x).call(y)
+
+            # again, lazy evaluation prevents
+            # it from reducing to x early
+
+            self.assertTrue(x != AAKxy)
+
+            # but if we evaluate it, it should work just fine
+
+            self.assertTrue(x == AAKxy.evaluate_now())
+
+        # this one is actually normally a bug
+        # it's a consequence of the order of substitutions
+        # it is able to happen because there is a variable name conflict
+        # how it happens here:
+        #    (lambda y.x)[x := y] x
+        # -> (lambda y.y) x
+        # -> x
+        # remove this case when a workaround is implemented
+
+        self.assertTrue(
+            K.call(lambda_var('y')).call(lambda_var('x')).evaluate_now() \
+            == lambda_var('x')
+            )
+
+        # also check the De Bruijn indexed form
+
+        Kdb = lambda_func(None, lambda_func(None, lambda_var(2)))
+
+        self.assertTrue(K != Kdb)
+        self.assertTrue(K.to_indexed() == Kdb)
+
+        # the current version strictly forbids
+        # directly calling a De Bruijn indexed form
+        # due to some bugs that can happen with
+        # recursion.
+        # actually, it will throw an error,
+        # so we will test for this too
+
+        with self.assertRaises(TypeError):
+
+            Kdb.call(I)
+
 class TestLambdaCompute(unittest.TestCase):
     """
     Test cases focused on performing computations with

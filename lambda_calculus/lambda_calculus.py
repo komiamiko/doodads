@@ -88,7 +88,11 @@ class lambda_bind(object):
     Hash values are kept as part of the state and updated along with the
     update operations. This way, the hash operation can be O(1),
     at O(1) extra cost when updating. More specifically, a 128-bit internal
-    hash state is maintained, and this is also used for equality checks.    
+    hash state is maintained, and this is also used for equality checks.
+
+    The current implementation forbids directly evaluating functions
+    using the De Bruijn indexed form, so in normal use,
+    the indexed substitutions will never be used.
     """
     def __init__(self, adds=None):
         """
@@ -214,7 +218,7 @@ class lambda_bind(object):
         but only the most recent/innermost will be shown.
         """
         bits = []
-        for k, v in self.named:
+        for k, v in self.named.items():
             bits.append(str(k) + ' := ' + str(v))
         for v in self.indexed:
             bits.append(str(v))
@@ -344,6 +348,9 @@ class lambda_var(lambda_expr):
         try:
             # can we substitute?
             result = binds[self.var_name]
+            # prevent infinite recursion from substituting with itself
+            if result == self:
+                return self
             # we may not be done yet, keep going recursively
             return result.evaluate_now(binds)
         except KeyError:
