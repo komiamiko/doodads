@@ -32,6 +32,10 @@ _hash_key = tuple(random.getrandbits(64) for _ in range(2))
 del sr
 del random
 
+# ---
+# Internal utilties
+# ---
+
 def _hash_combine(hash_state, value):
     """
     Combines a hash state and a single hash value:
@@ -71,6 +75,10 @@ def _name_generator():
     """
     import itertools
     return map((lambda n:'x_{'+str(n)+'}'), itertools.count())
+
+# ---
+# lambda objects, low level API
+# ---
 
 class lambda_bind(object):
     """
@@ -664,3 +672,95 @@ class lambda_func(lambda_expr):
             self = self.call(arg)
         self = self.evaluate_now()
         return self
+
+# ---
+# parsing API and helpers
+# ---
+
+# map common left brackets to right brackets
+_right_brackets = {
+    '(':')',
+    '[':']',
+    '{':'}',
+    }
+# regex that matches exactly a lone lambda
+_regex_lambda = '^\\\\?(?:lambda|λ|Λ)$'
+
+def _parse_latex_raw(stream, pre='', end=None):
+    """
+    Parse some LaTeX-like term, and return the string exactly.
+    More specifically, reads in some substring S,
+    and returns (V, R, E),
+    where V is what we interpreted as a LaTeX term as a string,
+    R is what we consumed but did not use,
+    and E is a flag that is True if
+    the end is due to reaching the end character
+    and False if it is because we found the end of
+    this one term.
+    Guarantees:
+    - V + R = S, unless E is true, in which case the end
+        character is not included in R
+    - V is not empty
+    """
+    pass # TODO
+
+def _parse_lambda_func(stream, end=None):
+    """
+    Read in a lambda function.
+    Assumes we already read the lambda at the start.
+    After the function declaration, defers back to
+    _parse_lambda_expr.
+    """
+    pass # TODO
+
+def _parse_lambda_expr(stream, end=None):
+    """
+    Parse as much as we can and return a lambda_expr object.
+    """
+    import itertools
+    import re
+    # try to get the first token to identify the type of expression
+    c = ''
+    while c <= ' ':
+        c = next(stream)
+    # is it a bracket?
+    if c in '([{':
+        # okay, we parse a full term
+        terms = [_parse_lambda_expr(stream, end=_right_brackets[c])]
+    # probably some kind of token then
+    else:
+        first, rem, hit_end = _parse_latex_raw(stream, pre=c, end=end)
+        stream = itertools.chain(rem, stream)
+        # is the first thing exactly lambda?
+        if re.match(_regex_lambda, first):
+            # okay, we just entered a function
+            # pass it over to the function parser
+            return _parse_lambda_func(stream, end=end)
+        # treat it as a variable literal then
+        terms = [lambda_var(first)]
+    pass # TODO
+
+def lambda_parse(stream):
+    """
+    Given a character iterator, parse a lambda expression
+    from it, of type lambda_expr.
+    Can also take string inputs.
+    Compatible with some LaTeX formatted inputs,
+    but does not support all of LaTeX, only a subset which
+    is generally sufficient for parsing these lambda
+    expressions. Mostly behaves LaTeX-like, but will
+    treat a number as a single symbol rather than each
+    digit as a separate symbol.
+    Does not actually evaluate the expression.
+    """
+    if isinstance(stream, str):
+        it = iter(stream)
+        result = lambda_parse(it)
+        # under normal circumstances, all characters are consumed
+        return result
+    try:
+        result = _parse_lambda_expr(stream)
+        return result
+    except StopIteration:
+        raise ValueError('Parser unexpected ran out of characters to parse.' \
+                         'The input string or stream is not a valid lambda expression.')
