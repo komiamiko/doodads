@@ -822,7 +822,30 @@ def _parse_lambda_func(stream, end=None):
     After the function declaration, defers back to
     _parse_lambda_expr.
     """
-    pass # TODO
+    c = next(stream)
+    while c <= ' ':
+        c = next(stream)
+    if c == end:
+        raise ValueError('Lambda function definition in brackets is empty.')
+    first, rem, hit_end = _parse_latex_raw(stream, pre=c, end=end)
+    if hit_end:
+        raise ValueError('Lambda function definition in brackets is incomplete. ' \
+                         'No dot or variable found.')
+    stream = _stream_prepend(rem, stream)
+    if first == '.':
+        # using De Bruijn indexed form, no variable declaration
+        var_name = None
+    else:
+        var_name = first
+        # that was the variable declaration, now let's look for the dot
+        c = next(stream)
+        while c <= ' ':
+            c = next(stream)
+        if c != '.':
+            raise ValueError('Lambda function definition does not have ' \
+                             'variable followed by a dot.')
+    body = _parse_lambda_expr(stream, end=end)
+    return lambda_func(var_name, body)
 
 def _parse_lambda_expr(stream, end=None):
     """
@@ -839,7 +862,8 @@ def _parse_lambda_expr(stream, end=None):
                          'You may have brackets with nothing between them.')
     # is it a bracket?
     if c in '([{':
-        # okay, we parse a full term
+        # okay, we parse stuff in the brackets
+        # as a full term
         terms = [_parse_lambda_expr(stream, end=_right_brackets[c])]
     # probably some kind of token then
     else:
