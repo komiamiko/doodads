@@ -17,6 +17,12 @@ Important usage notes:
   where name collisions may sometimes cause functions to behave
   in unexpected ways. For this reason, we strictly forbid
   directly evaluating the named form.
+- String forms of lambda expressions are LaTeX-compatible
+  (outputs from str) and LaTeX-like (input to parse_lambda).
+  Outputs of str will generally reconstruct the object
+  exactly when parsed, though strange variable names
+  may interfere with the parsing logic and cause
+  a different object to be constructed.
 """
 
 # pregenerate some random data which will be used to initialize constants
@@ -705,6 +711,17 @@ def _stream_prepend(rem, stream):
     import itertools
     return itertools.chain(rem, stream)
 
+def _parse_lambda_var(istr):
+    """
+    Convert a string to a lambda_var object.
+    If possible, makes it an integer.
+    """
+    try:
+        var_name = int(istr)
+    except ValueError:
+        var_name = istr
+    return lambda_var(var_name)
+
 def _parse_latex_raw(stream, pre='', collect_alpha=False, end=None):
     """
     Parse some LaTeX-like term, and return the string exactly.
@@ -893,7 +910,7 @@ def _parse_lambda_expr(stream, end=None):
         stream = _stream_prepend(rem, stream)
         first, rem, hit_end = _parse_latex_raw(stream, collect_alpha=False, end=end)
         stream = _stream_prepend(rem, stream)
-        terms = [lambda_var(first)]
+        terms = [_parse_lambda_var(first)]
     # if we hit the end, stop here
     if hit_end:
         return terms[0]
@@ -933,7 +950,7 @@ def _parse_lambda_expr(stream, end=None):
                 stream = _stream_prepend(rem, stream)
                 first, rem, hit_end = _parse_latex_raw(stream, collect_alpha=False, end=end)
                 stream = _stream_prepend(rem, stream)
-                terms.append(lambda_var(first))
+                terms.append(_parse_lambda_var(first))
                 # this may be the end
                 if hit_end:
                     break

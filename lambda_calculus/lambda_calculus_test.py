@@ -346,6 +346,117 @@ class TestInternalState(unittest.TestCase):
         # test reconstruction
         self.assertTrue(eval(repr(AAKxx),namespace) == AAKxx)
 
+    def test_parse_str(self):
+        """
+        Tests the parser against some test vectors,
+        and tests the parser's ability to reconstruct
+        objects that have been str'd.
+        """
+        import functools
+        from lambda_calculus import lambda_var, lambda_call, lambda_func, parse_lambda
+
+        # make the test vectors list as (object, [str ...])
+        # all test vectors here are currently supported by the parser
+
+        test_vectors = [
+            # parse a single variable
+            (lambda_var('x'), ['x']),
+            # handle extra whitespace
+            (lambda_var('A'), ['A', '  A', 'A  ', '  A  ']),
+            # parse number variables
+            (lambda_var(1), ['1']),
+            # parse multiple digit number variables
+            (lambda_var(1234), ['1234']),
+            # parse a basic call
+            (lambda_call(lambda_var('x'), lambda_var('x')), ['x x', 'xx']),
+            # test variables styled like latex commands
+            (lambda_var('\\epsilon'), ['\\epsilon']),
+            # parse a command that looks like lambda
+            (lambda_var('\\lambdaa'), ['\\lambdaa']),
+            # parse a name variable that actually contains the word lambda
+            (functools.reduce(lambda_call,map(lambda_var,'lambdaa')), [
+                'lambdaa',
+                'lambd aa'
+                ]),
+            # parse larger call trees
+            (functools.reduce(lambda_call,map(lambda_var,'xxxyyy')), [
+                'x  x x  y y y',
+                'xxx  yyy',
+                'x x xy y y',
+                # can it handle brackets well?
+                '(xxx)yyy',
+                '((xx)xy)yy',
+                '( ( ( x ) x x ) y y ) y',
+                '(((x)))(x)x(y)y((y))',
+                '{[(x)]}xx[y]{y}(y)'
+                ]),
+            # test a simple lambda function
+            (lambda_func(None,lambda_var(1)), [
+                'λ.1',
+                '\\lambda.1',
+                'lambda.1',
+                '\\lambda . 1',
+                'lambda .1',
+                'lambda.((1))'
+                ]),
+            # test nested lambda definitions
+            (lambda_func(None,lambda_func(None,lambda_var(2))), [
+                'λ.λ.2',
+                'λ .λ .2',
+                '\\lambda .lambda. 2',
+                '\\lambda.(lambda.2)'
+                ]),
+            # test parse order with lambda function
+            (lambda_call(lambda_var(1),lambda_func(None,lambda_call(lambda_var(1),lambda_var(1)))), [
+                '1 (λ. 1 1)',
+                '1(λ.1 1)',
+                '1λ.1 1',
+                '(1lambda.1 1)',
+                '(1\\lambda.(1 1))'
+                ]),
+            # test subscripts and superscripts in variable names
+            (lambda_var('x_2^4'), ['x_2^4']),
+            (lambda_call(lambda_var('x_1^1'),lambda_var('x_3^3')), [
+                'x_1^1  x_3^3',
+                '{x_1^1}{x_3^3}',
+                'x_1^1x_3^3'
+                ]),
+            # a more complicated function definition
+            (lambda_func(None,lambda_func(None,lambda_func(None,lambda_call(lambda_call(lambda_var(3),lambda_var(1)),lambda_call(lambda_var(2),lambda_var(1)))))), [
+                'λ.λ.λ.3 1 (2 1)',
+                'lambda . lambda . lambda . ((3)(1))((2)(1))'
+                ]),
+            (lambda_call(lambda_func('x_y^z',lambda_var('x_y^z')),(lambda_func('π',lambda_var('π')))), [
+                '(λ x_y^z.x_y^z)λπ.π',
+                '[\\lambda x_y^z.x_y^z]{\\lambda π.π}'
+                ])
+            ]
+
+        # test all the test vectors we made
+        for as_obj, as_str_list in test_vectors:
+
+            for as_str in as_str_list:
+
+                # test that the parser can parse a string
+
+                parse_result = parse_lambda(as_str)
+
+                # test that the parsed result is correct
+
+                self.assertTrue(parse_result == as_obj)
+
+                # test that str works
+
+                str_result = str(as_obj)
+
+                # test that parsing it back works
+
+                parse_result = parse_lambda(str_result)
+
+                # see that it matches
+
+                self.assertTrue(parse_result == as_obj)
+
 class TestLambdaCompute(unittest.TestCase):
     """
     Test cases focused on performing computations with
