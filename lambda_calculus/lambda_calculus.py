@@ -705,7 +705,7 @@ def _stream_prepend(rem, stream):
     import itertools
     return itertools.chain(rem, stream)
 
-def _parse_latex_raw(stream, pre='', end=None):
+def _parse_latex_raw(stream, pre='', collect_alpha=False, end=None):
     """
     Parse some LaTeX-like term, and return the string exactly.
     More specifically, reads in some substring S,
@@ -779,8 +779,15 @@ def _parse_latex_raw(stream, pre='', end=None):
             rem.append(pre_content.pop())
         else:
             # started with something else, like a letter
-            # no further processing to do
-            pass
+            # no further processing to do, unless the flag says so
+            if collect_alpha:
+                c = next(stream)
+                while 'A' <= c <= 'Z' or 'a' <= c <= 'z':
+                    pre_content.append(c)
+                    c = next(stream)
+                if c == end:
+                    return ''.join(pre_ws) + ''.join(pre_content), '', True
+                rem.append(c)
         # keep going until we hit something we can't handle
         while True:
             exit_now = False
@@ -851,6 +858,7 @@ def _parse_lambda_expr(stream, end=None):
     """
     Parse as much as we can and return a lambda_expr object.
     """
+    import functools
     import re
     # try to get the first token to identify the type of expression
     c = ''
@@ -860,6 +868,7 @@ def _parse_lambda_expr(stream, end=None):
     if c == end:
         raise ValueError('Tried to parse an empty sub-expression. ' \
                          'You may have brackets with nothing between them.')
+    hit_end = False
     # is it a bracket?
     if c in '([{':
         # okay, we parse stuff in the brackets
@@ -867,29 +876,91 @@ def _parse_lambda_expr(stream, end=None):
         terms = [_parse_lambda_expr(stream, end=_right_brackets[c])]
     # probably some kind of token then
     else:
-        first, rem, hit_end = _parse_latex_raw(stream, pre=c, end=end)
-        stream = _stream_prepend(rem, stream)
+        stream = _stream_prepend(c, stream)
+        first, rem, hit_end = _parse_latex_raw(stream, collect_alpha=True, end=end)
         # is the first thing exactly lambda?
         if re.match(_regex_lambda, first):
             # okay, we just entered a function
             # pass it over to the function parser
+            stream = _stream_prepend(rem, stream)
             return _parse_lambda_func(stream, end=end)
         # treat it as a variable literal then
+        # we have to redo the parsing because
+        # this interpretation might be wrong
+        rem = first + rem
+        if hit_end:
+            rem += end or ''
+        stream = _stream_prepend(rem, stream)
+        first, rem, hit_end = _parse_latex_raw(stream, collect_alpha=False, end=end)
+        stream = _stream_prepend(rem, stream)
         terms = [lambda_var(first)]
-    pass # TODO
+    # if we hit the end, stop here
+    if hit_end:
+        return terms[0]
+    # parse more terms
+    try:
+        while True:
+            # read until not whitespace
+            c = next(stream)
+            while c <= ' ':
+                c = next(stream)
+            # detect end
+            if c == end:
+                break
+            # repeat the term parsing logic, but slightly different
+            # is it a bracket?
+            if c in '([{':
+                # okay, we parse stuff in the brackets
+                # as a full term
+                terms.append(_parse_lambda_expr(stream, end=_right_brackets[c]))
+            # probably some kind of token then
+            else:
+                stream = _stream_prepend(c, stream)
+                first, rem, hit_end = _parse_latex_raw(stream, collect_alpha=True, end=end)
+                # is the first thing exactly lambda?
+                if re.match(_regex_lambda, first):
+                    # okay, we just entered a function
+                    # pass it over to the function parser
+                    stream = _stream_prepend(rem, stream)
+                    terms.append(_parse_lambda_func(stream, end=end))
+                    break
+                # treat it as a variable literal then
+                # we have to redo the parsing because
+                # this interpretation might be wrong
+                rem = first + rem
+                if hit_end:
+                    rem += end or ''
+                stream = _stream_prepend(rem, stream)
+                first, rem, hit_end = _parse_latex_raw(stream, collect_alpha=False, end=end)
+                stream = _stream_prepend(rem, stream)
+                terms.append(lambda_var(first))
+                # this may be the end
+                if hit_end:
+                    break
+    except StopIteration as exc:
+        # only ignore the exception if we expected it
+        if end is not None:
+            raise exc
+    # combine left to right as call
+    term = functools.reduce(lambda_call, terms)
+    return term
 
 def lambda_parse(stream):
     """
     Given a character iterator, parse a lambda expression
     from it, of type lambda_expr.
     Can also take string inputs.
+    
     Compatible with some LaTeX formatted inputs,
     but does not support all of LaTeX, only a subset which
     is generally sufficient for parsing these lambda
     expressions. Mostly behaves LaTeX-like, but will
     treat a number as a single symbol rather than each
     digit as a separate symbol.
+    
     Does not actually evaluate the expression.
+
+    Aliased to lambda_parse and parse_lambda.
     """
     if isinstance(stream, str):
         it = iter(stream)
@@ -900,5 +971,8 @@ def lambda_parse(stream):
         result = _parse_lambda_expr(stream)
         return result
     except StopIteration:
-        raise ValueError('Parser unexpected ran out of characters to parse.' \
+        raise ValueError('Parser unexpected ran out of characters to parse. ' \
                          'The input string or stream is not a valid lambda expression.')
+
+# make an alias
+parse_lambda = lambda_parse
