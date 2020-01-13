@@ -686,6 +686,25 @@ _right_brackets = {
 # regex that matches exactly a lone lambda
 _regex_lambda = '^\\\\?(?:lambda|λ|Λ)$'
 
+def _stream_prepend(rem, stream):
+    """
+    Return an iterator which will first exhaust the
+    characters of rem and then iterate from stream.
+
+    Useful for when we accidentally read more characters
+    that should actually be handled by other code.
+    
+    Expected to be implemented efficiently
+    such that there is no "dead" overhead,
+    as in, if N strings have been prepended
+    so far and also exhausted,
+    the total overhead for the iterator is O(1)
+    more than just the original stream by itself.
+    Currently backed by itertools.chain
+    """
+    import itertools
+    return itertools.chain(rem, stream)
+
 def _parse_latex_raw(stream, pre='', end=None):
     """
     Parse some LaTeX-like term, and return the string exactly.
@@ -702,7 +721,99 @@ def _parse_latex_raw(stream, pre='', end=None):
         character is not included in R
     - V is not empty
     """
-    pass # TODO
+    try:
+        # pre whitespace and non-whitespace
+        pre_ws = []
+        pre_content = list(pre)
+        # post tags
+        tags = []
+        # unconsumed remaining stuff
+        rem = []
+        # flag for if we never hit the end character
+        no_end = True
+        # read until the first non-whitespace or end
+        while not pre_content:
+            c = next(stream)
+            if c == end:
+                return ''.join(pre_ws), '', True
+            if c <= ' ':
+                pre_ws.append(c)
+            else:
+                pre_content.append(c)
+        # what was our character?
+        fc = pre_content[-1]
+        if fc == '\\':
+            # started with \
+            # parse a full command
+            # command uses latin letters
+            c = next(stream)
+            while 'A' <= c <= 'Z' or 'a' <= c <= 'z':
+                pre_content.append(c)
+                c = next(stream)
+            if c == end:
+                return ''.join(pre_ws) + ''.join(pre_content), '', True
+            rem.append(c)
+        elif '0' <= fc <= '9':
+            # started with a digit
+            # parse a number
+            c = next(stream)
+            while '0' <= c <= '9':
+                pre_content.append(c)
+                c = next(stream)
+            if c == end:
+                return ''.join(pre_ws) + ''.join(pre_content), '', True
+            rem.append(c)
+        elif fc in '([{':
+            # it's a bracket!
+            # match the other bracket
+            rb = _right_brackets[fc]
+            # parse everything inside the brackets
+            sub, subrem, hit_end = _parse_latex_raw(stream, end=rb)
+            while not hit_end:
+                pre_content.append(sub)
+                sub, subrem, hit_end = _parse_latex_raw(stream, pre=subrem, end=rb)
+            pre_content.append(rb)
+        elif fc in '_^':
+            # not normally allowed, but we'll parse it anyway
+            # because we can
+            rem.append(pre_content.pop())
+        else:
+            # started with something else, like a letter
+            # no further processing to do
+            pass
+        # keep going until we hit something we can't handle
+        while True:
+            exit_now = False
+            # load stuff into rem until it has something in it
+            while not rem or rem[-1] <= ' ':
+                c = next(stream)
+                if c == end:
+                    no_end = False
+                    exit_now = True
+                    break
+                rem.append(c)
+            if exit_now:
+                break
+            # if we are not meant to handle it, stop here
+            if rem[-1] not in '_^':
+                break
+            # okay, we can actually deal with this
+            # push it over to the tags group and parse a single token after
+            tags += rem
+            sub, subrem, hit_end = _parse_latex_raw(stream, end=end)
+            tags.append(sub)
+            rem = list(subrem)
+            if hit_end:
+                no_end = False
+                break
+    except StopIteration as exc:
+        # only ignore the exception if we expected it
+        if end is not None:
+            raise exc
+        no_end = False
+    return ''.join(pre_ws) + ''.join(pre_content) + ''.join(tags), \
+           ''.join(rem), \
+           not no_end
 
 def _parse_lambda_func(stream, end=None):
     """
@@ -717,12 +828,15 @@ def _parse_lambda_expr(stream, end=None):
     """
     Parse as much as we can and return a lambda_expr object.
     """
-    import itertools
     import re
     # try to get the first token to identify the type of expression
     c = ''
     while c <= ' ':
         c = next(stream)
+    # if we hit the end, this is an error
+    if c == end:
+        raise ValueError('Tried to parse an empty sub-expression. ' \
+                         'You may have brackets with nothing between them.')
     # is it a bracket?
     if c in '([{':
         # okay, we parse a full term
@@ -730,7 +844,7 @@ def _parse_lambda_expr(stream, end=None):
     # probably some kind of token then
     else:
         first, rem, hit_end = _parse_latex_raw(stream, pre=c, end=end)
-        stream = itertools.chain(rem, stream)
+        stream = _stream_prepend(rem, stream)
         # is the first thing exactly lambda?
         if re.match(_regex_lambda, first):
             # okay, we just entered a function
