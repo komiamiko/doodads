@@ -539,8 +539,16 @@ class TestLambdaCompute(unittest.TestCase):
         verify_number(succ.call(succ.call(n2)), 4)
         verify_number(succ.call(succ.call(n3)), 5)
 
-        # no add, multiply, or exponent, since right now they
-        # break the recursion limit
+        # test exponents directly
+        # as functions: m n = same as as arithmetic: n^m
+
+        verify_number(n1.call(n1), 1)
+        verify_number(n1.call(n2), 2)
+        verify_number(n1.call(n0), 0)
+        verify_number(n0.call(n2), 1)
+        verify_number(n2.call(n2), 4)
+        verify_number(n3.call(n2), 8)
+        verify_number(n2.call(n3), 9)
 
 class TestUserAPI(unittest.TestCase):
     """
