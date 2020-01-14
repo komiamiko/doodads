@@ -362,6 +362,9 @@ class lambda_var(lambda_expr):
         try:
             # can we substitute?
             result = binds[self.var_name]
+            # signal None means leave unchanged
+            if result is None:
+                return self
             # prevent infinite recursion from substituting with itself
             if result == self:
                 return self
@@ -633,7 +636,7 @@ class lambda_func(lambda_expr):
         # modify binds in-place
         binds.append(
             self.var_name,
-            lambda_var(self.var_name if self.var_name is not None else 1)
+            (lambda_var(self.var_name) if self.var_name is not None else None)
             )
         # we expect lambda_subs to also unroll back the binds
         alt_expr = alt_expr.evaluate_now()

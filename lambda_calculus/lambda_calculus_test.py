@@ -465,7 +465,82 @@ class TestLambdaCompute(unittest.TestCase):
     necessarily indicate the program has an error,
     but it is something to take note of.
     """
-    pass
+    def test_church_numerals(self):
+        """
+        Church numeral for an integer n is a function
+        which causes its input to be repeated n times:
+        n f x = f ( f ( ... ( x ) ... ) )
+        with n copies of f.
+        We can define some functions representing Church
+        numerals, and then do some math with them.
+
+        Assumes parser is already working.
+
+        Not a comprehensive arithmetic test.
+        At time of writing, remotely large Church numerals
+        will result in exceeding the recursion depth limit,
+        which is probably due to a bug rather than because
+        the function evaluation is particularly complex.
+        """
+        from lambda_calculus import parse_lambda
+
+        x = parse_lambda('x')
+        y = parse_lambda('y')
+
+        def verify_number(func, n):
+            """
+            Check that the function provided does actually
+            represent the Church numeral for n.
+            """
+            # make the reference expression
+            ref = y
+            for _ in range(n):
+                ref = x.call(ref)
+            # make the actual test evaluation
+            cmp = func.call(x).call(y).evaluate_now()
+            # are they the same?
+            self.assertTrue(ref == cmp)
+
+        # check some of the basic ones
+
+        n0 = parse_lambda('\\lambda.\\lambda.1')
+
+        verify_number(n0, 0)
+
+        n1 = parse_lambda('\\lambda.\\lambda.2 1')
+
+        verify_number(n1, 1)
+
+        I = parse_lambda('\\lambda.1')
+
+        verify_number(I, 1)
+
+        # the first non trivial counting numbers
+
+        n2 = parse_lambda('\\lambda.\\lambda.2(2 1)')
+
+        verify_number(n2, 2)
+
+        n3 = parse_lambda('\\lambda.\\lambda.2(2(2 1))')
+
+        verify_number(n3, 3)
+
+        # make and test successor function
+
+        succ = parse_lambda('\\lambda.\\lambda.\\lambda.2(3 2 1)')
+
+        verify_number(succ.call(n0), 1)
+        verify_number(succ.call(n1), 2)
+        verify_number(succ.call(n2), 3)
+        verify_number(succ.call(n3), 4)
+
+        verify_number(succ.call(succ.call(n0)), 2)
+        verify_number(succ.call(succ.call(n1)), 3)
+        verify_number(succ.call(succ.call(n2)), 4)
+        verify_number(succ.call(succ.call(n3)), 5)
+
+        # no add, multiply, or exponent, since right now they
+        # break the recursion limit
 
 class TestUserAPI(unittest.TestCase):
     """
