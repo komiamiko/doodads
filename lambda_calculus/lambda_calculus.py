@@ -23,6 +23,9 @@ Important usage notes:
   exactly when parsed, though strange variable names
   may interfere with the parsing logic and cause
   a different object to be constructed.
+- Renaming an indexed variable as it passes between scopes
+  is referred to here as "promotion". It's not standard
+  mathematical vocabulary, but giving it a name helps communication.
 """
 
 # pregenerate some random data which will be used to initialize constants
@@ -116,6 +119,7 @@ class lambda_bind(object):
         import collections
         self.named = collections.ChainMap()
         self.indexed = []
+        self.promotes = [0]
         self._adds = []
         self._hash = [0]*2
         self += adds
@@ -127,12 +131,19 @@ class lambda_bind(object):
         """
         try:
             if isinstance(index, str):
-                return self.named[index]
+                return self.named[index], 0
             else:
-                return self.indexed[-index]
+                return self.indexed[-index], self.promotes[-1] - self.promotes[-index-1]
         except IndexError as exc:
             raise KeyError(exc)
-    def append(self, index, value):
+    def _get_last_promote(self):
+        """
+        How much is the most recent item promoted by?
+        """
+        if not self:
+            return 0
+        return self.promotes[-1]
+    def append(self, index, value, promote):
         """
         Add a new entry for a named or indexed variable.
         """
@@ -140,14 +151,15 @@ class lambda_bind(object):
             self.named.maps = [{index:value}] + self.named.maps
         else:
             self.indexed.append(value)
+        self.promotes.append(self._get_last_promote() + promote)
         self._adds.append(index)
         # update hash
-        hash_add = hash((index, value))
+        hash_add = hash((index, value, promote))
         _hash_combine(self._hash, hash_add)
     def pop(self):
         """
         Remove the most recent entry for a named or indexed variable,
-        and return the value.
+        and return the value and promotion count.
         """
         index = self._adds.pop()
         if isinstance(index, str):
@@ -156,11 +168,12 @@ class lambda_bind(object):
                 .values()))
         else:
             value = self.indexed.pop()
+        promote = self.promotes.pop() > self.promotes[-1]
         # update hash
-        hash_add = hash((index, value))
+        hash_add = hash((index, value, promote))
         _hash_uncombine(self._hash, hash_add)
         # return popped value
-        return value
+        return value, promote
     def __len__(self):
         """
         How many variables have been bound?
@@ -185,12 +198,12 @@ class lambda_bind(object):
         adds = []
         while self:
             index = self._adds[-1]
-            value = self.pop()
-            adds.append((index, value))
+            value, promote = self.pop()
+            adds.append((index, value, promote))
         adds = adds[::-1]
         if not destructive:
-            for index, value in adds:
-                self.append(index, value)
+            for index, value, promote in adds:
+                self.append(index, value, promote)
         return adds
     def __add__(self, other):
         """
@@ -218,8 +231,8 @@ class lambda_bind(object):
         if isinstance(other, lambda_bind):
             other = other.flatten()
         # append every substitution
-        for index, value in other:
-            self.append(index, value)
+        for index, value, promote in other:
+            self.append(index, value, promote)
         return self
     def __str__(self):
         """
@@ -238,6 +251,7 @@ class lambda_bind(object):
             bits.append(str(v))
         result = ', '.join(bits)
         result = '[' + result + ']'
+        result += str(self.promotes)
         return result
     def __repr__(self):
         result = 'lambda_bind(' + \
@@ -291,22 +305,32 @@ class lambda_expr(object):
         if name_stack is None:
             name_stack = []
         return self._to_indexed(name_stack)
-    def evaluate_now(self, binds=None):
+    def _promote(self, promote):
+        """
+        Used internally to increase numerical variables.
+        Returns (self', promote') which is either
+        unchanged, or has been fully "promoted".
+        Will only perform the promote operaiton
+        if called on a numerical variable.
+        """
+        return self, promote
+    def evaluate_now(self, binds=None, promote=0):
         """
         Force full evaluation now, and return the evaluated lambda expression.
 
         Actually a wrapper around ._evaluate_now(binds)
         """
+        print(f'EVAL | {self} | {binds} | {promote}')
         if binds is None:
             binds = lambda_bind()
-        return self._evaluate_now(binds)
+        return self._evaluate_now(binds, promote)
     def call(self, arg, binds=None):
         """
         Call this value with some other value.
         """
         result = lambda_call(self, arg)
         if binds:
-            result = lambda_subs(result, binds, len(binds))
+            result = lambda_subs(result, binds)
         return result
     
 class lambda_var(lambda_expr):
@@ -353,23 +377,33 @@ class lambda_var(lambda_expr):
             return self
         new_name = len(name_stack) - name_stack.index(self.var_name)
         return lambda_var(new_name)
-    def _evaluate_now(self, binds):
+    def _promote(self, promote):
+        """
+        Attempt to promote the numerical variable now.
+        Returns (new variable, promote)
+        """
+        if isinstance(self.var_name, str):
+            return self, 0
+        return lambda_var(self.var_name + promote), 0
+    def _evaluate_now(self, binds, promote):
         """
         Underlying function for the wrapped .evaluate_now()
         """
+        # try to promote the variable here
+        self, promote = self._promote(promote)
         if not binds:
             return self
         try:
             # can we substitute?
-            result = binds[self.var_name]
-            # signal None means leave unchanged
-            if result is None:
-                return self
+            result, rpromote = binds[self.var_name]
+            # promote appropriately
+            promote = (self.var_name if isinstance(self.var_name, int) else 0) - rpromote
+            result, promote = result._promote(promote)
             # prevent infinite recursion from substituting with itself
             if result == self:
                 return self
             # we may not be done yet, keep going recursively
-            return result.evaluate_now(binds)
+            return result.evaluate_now(binds, promote)
         except KeyError:
             # no substitution possible, that's it
             return self
@@ -435,13 +469,13 @@ class lambda_call(lambda_expr):
             self.func.to_indexed(name_stack),
             self.arg.to_indexed(name_stack)
             )
-    def _evaluate_now(self, binds):
+    def _evaluate_now(self, binds, promote):
         """
         Underlying function for the wrapped .evaluate_now()
         """
         # immediate evaluation of function and argument
-        func = self.func.evaluate_now(binds)
-        arg = self.arg.evaluate_now(binds)
+        func = self.func.evaluate_now(binds, promote)
+        arg = self.arg.evaluate_now(binds, promote)
         # and then call, but don't evaluate yet
         # if this is unable to evaluate further, it will just
         # wrap in a lambda_call object
@@ -499,23 +533,6 @@ class lambda_subs(lambda_expr):
         return 'lambda_subs(' + repr(self.expr) + \
                ', ' + repr(self.binds) + \
                ', ' + repr(self.mark) + ')'
-    def to_named(self, name_iter=None, name_stack=None):
-        """
-        Converts this expression and all sub-expressions recursively
-        to use the named form, and returns the new function.
-        If already in named form, does nothing.
-
-        Naming scheme may change unexpectedly;
-        current implementation uses a counter and hexadecimal.
-        """
-        if name_iter is None:
-            return iter(_name_generator())
-        if name_stack is None:
-            name_stack = []
-        return lambda_call(
-            self.func.to_named(name_iter, name_stack),
-            self.arg.to_named(name_iter, name_stack)
-            )
     def _to_named(self, name_iter, name_stack):
         """
         Would normally convert to named form,
@@ -530,7 +547,7 @@ class lambda_subs(lambda_expr):
         """
         raise TypeError('Cannot refactor a substitution object' \
                         '(of type lambda_subs) to De Bruijn indexed form')
-    def _evaluate_now(self, binds):
+    def _evaluate_now(self, binds, promote):
         """
         Force full evaluation now, and return the
         evaluated lambda expression.
@@ -542,7 +559,7 @@ class lambda_subs(lambda_expr):
         mark = len(binds) + self.mark
         binds += self.binds
         # apply substitutions to the expression
-        result = self.expr.evaluate_now(binds)
+        result = self.expr.evaluate_now(binds, promote)
         # unroll back to the mark to remove
         # substitutions that have gone out of scope
         binds.keep_first(mark)
@@ -623,7 +640,7 @@ class lambda_func(lambda_expr):
         result = lambda_func(None, self.expr.to_indexed(name_stack))
         name_stack.pop()
         return result
-    def _evaluate_now(self, binds):
+    def _evaluate_now(self, binds, promote):
         """
         Underlying function for the wrapped .evaluate_now()
         """
@@ -636,7 +653,8 @@ class lambda_func(lambda_expr):
         # modify binds in-place
         binds.append(
             self.var_name,
-            (lambda_var(self.var_name) if self.var_name is not None else None)
+            lambda_var(self.var_name if self.var_name is not None else 0),
+            False
             )
         # we expect lambda_subs to also unroll back the binds
         alt_expr = alt_expr.evaluate_now()
@@ -668,7 +686,7 @@ class lambda_func(lambda_expr):
             binds = lambda_bind()
         self = self._require_callable()
         unroll_to = len(binds)
-        binds.append(self.var_name, arg)
+        binds.append(self.var_name, arg, True)
         return lambda_subs(self.expr, binds, unroll_to)
     def __call__(self, *args):
         """

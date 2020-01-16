@@ -47,7 +47,7 @@ class TestInternalState(unittest.TestCase):
         # we will use str -> str mappings, which are
         # allowed in the current implementation
 
-        A.append('xyz', 'abc')
+        A.append('xyz', 'abc', False)
 
         # A: [xyz := abc]
         # B: []
@@ -60,7 +60,7 @@ class TestInternalState(unittest.TestCase):
         # remove the most recent addition to A,
         # and ensure that it is the correct value
 
-        self.assertTrue(A.pop() == 'abc')
+        self.assertTrue(A.pop()[0] == 'abc')
 
         # A: []
         # B: []
@@ -72,10 +72,10 @@ class TestInternalState(unittest.TestCase):
 
         # add some more things...
 
-        A.append('ab', 'cd')
-        A.append(None, 'xyz')
-        B.append(None, 'xyz')
-        B.append('ab', 'cd')
+        A.append('ab', 'cd', False)
+        A.append(None, 'xyz', False)
+        B.append(None, 'xyz', False)
+        B.append('ab', 'cd', False)
 
         # A: [ab := cd, xyz]
         # B: [xyz, ab := cd]
@@ -214,7 +214,7 @@ class TestInternalState(unittest.TestCase):
         # we will write Lx for an expression which ultimately
         # evaluates to x but is using a lazy wrapper
 
-        x_to_y = lambda_bind([('x', y)])
+        x_to_y = lambda_bind([('x', y, False)])
         
         Lyy = x.call(x, binds=x_to_y)
 
@@ -496,8 +496,10 @@ class TestLambdaCompute(unittest.TestCase):
             ref = y
             for _ in range(n):
                 ref = x.call(ref)
+            print('ARITHMETIC',n,func)
             # make the actual test evaluation
             cmp = func.call(x).call(y).evaluate_now()
+            print(ref,cmp)
             # are they the same?
             self.assertTrue(ref == cmp)
 
@@ -549,6 +551,28 @@ class TestLambdaCompute(unittest.TestCase):
         verify_number(n2.call(n2), 4)
         verify_number(n3.call(n2), 8)
         verify_number(n2.call(n3), 9)
+
+        # make and test addition function
+
+        add = parse_lambda('\\lambda.\\lambda.\\lambda.\\lambda.4 2(3 2 1)')
+
+        verify_number(add.call(n1).call(n1), 2)
+        verify_number(add.call(n2).call(n1), 3)
+        verify_number(add.call(n1).call(n0), 1)
+        verify_number(add.call(n2).call(n2), 4)
+        verify_number(add.call(n2).call(n3), 5)
+
+        # make and test multiply function
+
+        mul = parse_lambda('\\lambda.\\lambda.\\lambda.\\lambda.4(3 2)1')
+
+        verify_number(mul.call(n1).call(n1), 1)
+        verify_number(mul.call(n2).call(n1), 2)
+        verify_number(mul.call(n2).call(n2), 4)
+        verify_number(mul.call(n0).call(n1), 0)
+        verify_number(mul.call(n1).call(n0), 0)
+        verify_number(mul.call(n3).call(n2), 6)
+        verify_number(mul.call(n2).call(n3), 6)
 
 class TestUserAPI(unittest.TestCase):
     """
