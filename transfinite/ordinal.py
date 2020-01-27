@@ -11,6 +11,49 @@ import numbers
 import operator
 import warnings
 
+def cmp(x, y):
+    """
+    The 3-way comparison function as a pseudo-global.
+    x <  y --> returns a negative number
+    x == y --> returns 0
+    x >  y --> returns a positive number
+
+    Though not officially part of the ordinal API,
+    it is so important for performance here
+    that we justify making it publicly accessible.
+
+    To allow it to call your specialized comparison
+    methods, please implement .__cmp__ on your class.
+    Use a TypeError to signal an incompatible other object.
+    Otherwise it will use == and < to determine the order.
+    """
+    # try to call x's cmp
+    try:
+        return x.__cmp__(y)
+    except AttributeError:
+        pass
+    # maybe y implements cmp?
+    # this is like the reverse operations
+    try:
+        return - y.__cmp__(x)
+    except AttributeError:
+        pass
+    # well neither of them have it
+    # do we specialize for any types?
+    if isinstance(x, tuple) and isinstance(y, tuple) or \
+       isinstance(x, list) and isinstance(y, list):
+        for ix, iy in zip(x, y):
+            r = cmp(ix, iy)
+            if r != 0:return r
+        return len(x) - len(y)
+    # nothing left
+    # we must invoke the regular comparison methods
+    # use eq first because it's usually fastest
+    if x == y:return 0
+    # then use lt
+    if x < y:return -1
+    return 1
+
 def bin_log(x):
     """
     Base 2 floor logarithm for integers.
@@ -85,6 +128,7 @@ class ordinal_type(abc.ABC):
     Note that this does not contain any useful methods -
     please use the static functions to work with ordinals instead.
     """
+    pass
     
 ordinal_type.register(int)
 
@@ -150,6 +194,48 @@ def predecessor(value):
     if isinstance(value, numbers.Real):
         return value - 1
     return ordinal(_vnf = value._vnf, _cnf = value._cnf, _nat = value._nat - 1)
+
+def _long_hash(istream):
+    """
+    Produces a hash-like value which is longer than the usual hash value.
+    As currently implemented, returns a 4-tuple of regular width hashes.
+    These are used internally to have an acceptably low chance of collisions.
+    It does not make any promise of cryptographic security,
+    only protection against failure in regular use.
+    """
+    state = [0]*6
+    key = 0
+    def _mix(state, value, key):
+        """
+        Internal mixing function.
+        Absorbs a new value, then does a mixing round.
+        Designed to be inexpensive but provide sufficient mixing.
+        """
+        state[0] ^= hash(value)
+        for n in range(5):
+            state[n+1] ^= hash((state[n], key, n))
+        state[0] ^= hash((state[5], key, 5))
+    # absorb all values
+    for value in istream:
+        _mix(state, value, key)
+        key += 1
+    # pad/finalize
+    _mix(state, 0, -2)
+    # truncate result
+    return tuple(state)[0:4]
+
+class _veblen_cmp_wrap(object):
+    """
+    Wrapper around a tuple in the Veblen hierarchy,
+    which provides an override for __cmp__
+    and is not used for any purposes outside of comparison.
+    """
+    def __init__(self, value):
+        self.value = value
+    def __cmp__(self, other):
+        a = self.value
+        b = other.value
+        return ordinal._veblen_cmp(a, b)
 
 class ordinal(ordinal_type):
     """
@@ -235,12 +321,13 @@ class ordinal(ordinal_type):
         self._cnf = _cnf
         self._vnf = _vnf
         # Precompute the hash
-        _hash = hash(self._nat)
-        if self._cnf:
-            _hash = hash((_hash, 1, tuple(self._cnf)))
-        if self._vnf:
-            _hash = hash((_hash, 2, tuple(self._vnf)))
-        self._hash = _hash
+        # long width hash
+        _hash = list(map(hash, (
+            self._nat,
+            tuple(self._cnf),
+            tuple(self._vnf)
+            )))
+        self._hash = _long_hash(_hash)
         # Precompute the kind
         if self._nat == 0:
             if self._cnf or self._vnf:
@@ -272,7 +359,7 @@ class ordinal(ordinal_type):
         # fundamental sequence is lazily calculated
         self._fundamental = None
     def __hash__(self):
-        return self._hash
+        return hash(self._hash)
     def __str__(self):
         # keep consistent format that makes sense for the hierarchy
         normalize_at = 0
@@ -333,20 +420,6 @@ class ordinal(ordinal_type):
         return self._nat
     def __bool__(self):
         return self != 0
-    def __eq__(self, other):
-        if self is other:
-            return True
-        if isinstance(other, numbers.Real):
-            if self._cnf or self._vnf:
-                return False
-            return self._nat == other
-        if not isinstance(other, ordinal):
-            return False
-        if hash(self) != hash(other):return False
-        if self._tier != other._tier:return False
-        return self._vnf == other._vnf and self._cnf == other._cnf and self._nat == other._nat
-    def __ne__(self, other):
-        return not self == other
     @staticmethod
     def _veblen_cmp(a, b):
         """
@@ -354,11 +427,6 @@ class ordinal(ordinal_type):
         return the sign of a - b
         where a and b represent terms in the VNF
         """
-        # comparator-like function for other types
-        def _cmp(x, y):
-            if x == y:return 0
-            if x < y:return -1
-            return 1
         # unwrap a and b
         asub, aindex, acount = a
         bsub, bindex, bcount = b
@@ -387,45 +455,58 @@ class ordinal(ordinal_type):
         if asub < bsub:
             a2 = aindex
             b2 = ordinal(_vnf = [b[:-1] + (1,)])
-            return _cmp((a2, acount), (b2, bcount))
+            return cmp((a2, acount), (b2, bcount))
         if asub > bsub:
             a2 = ordinal(_vnf = [a[:-1] + (1,)])
             b2 = bindex
-            return _cmp((a2, acount), (b2, bcount))
+            return cmp((a2, acount), (b2, bcount))
         # asub == bsub
-        return _cmp((aindex, acount), (bindex, bcount))
-    def __lt__(self, other):
-        if self is other:
+        return cmp((aindex, acount), (bindex, bcount))
+    def __cmp__(self, other):
+        """
+        3-way comparison method.
+        """
+        # quickly check identity
+        if self is other:return 0
+        # check typing
+        if isinstance(other, numbers.Real):
+            if self._cnf or self._vnf:
+                return 1
+            return cmp(self._nat, other)
+        elif not isinstance(other, ordinal):
+            raise TypeError('The type you are attempting to compare an ordinal with '\
+                            'is not a numeric or ordinal type.')
+        # quickly check hash equality
+        if self._hash == other._hash:return 0
+        # they are not equal
+        # how about the tier?
+        tier_result = cmp(tier(self), tier(other))
+        if tier_result != 0:return tier_result
+        # in the same tier too
+        return cmp(self._cmpify(), other._cmpify())
+    def _cmpify(self):
+        """
+        After comparison shortcuts have failed,
+        convert this into something else that can be compared.
+        For internal use.
+        """
+        return (tuple(map(_veblen_cmp_wrap, self._vnf)), self._cnf, self._nat)
+    def __eq__(self, other):
+        # needs special wrapping to handle incompatible types
+        try:
+            return cmp(self, other) == 0
+        except TypeError:
             return False
-        if isinstance(other, numbers.Real):
-            if self._cnf or self._vnf:
-                return False
-            return self._nat < other
-        if not isinstance(other, ordinal):
-            raise TypeError('Cannot compare an ordinal with this type')
-        if hash(self) == hash(other):return False
-        if self._tier < other._tier:return True
-        if self._tier > other._tier:return False
-        vnf_key = functools.cmp_to_key(ordinal._veblen_cmp)
-        return (tuple(map(vnf_key, self._vnf)), self._cnf, self._nat) < (tuple(map(vnf_key, other._vnf)), other._cnf, other._nat)
+    def __ne__(self, other):
+        return not self == other
+    def __lt__(self, other):
+        return cmp(self, other) < 0
     def __le__(self, other):
-        if self is other:
-            return True
-        if isinstance(other, numbers.Real):
-            if self._cnf or self._vnf:
-                return False
-            return self._nat <= other
-        if not isinstance(other, ordinal):
-            raise TypeError('Cannot compare an ordinal with this type')
-        if hash(self) == hash(other):return True
-        if self._tier < other._tier:return True
-        if self._tier > other._tier:return False
-        vnf_key = functools.cmp_to_key(ordinal._veblen_cmp)
-        return (tuple(map(vnf_key, self._vnf)), self._cnf, self._nat) <= (tuple(map(vnf_key, other._vnf)), other._cnf, other._nat)
+        return cmp(self, other) <= 0
     def __gt__(self, other):
-        return not self <= other
+        return cmp(self, other) > 0
     def __ge__(self, other):
-        return not self < other
+        return cmp(self, other) >= 0
     def _get_fundamental(self):
         """
         Returns the fundamental sequence for this ordinal.

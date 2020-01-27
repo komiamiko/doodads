@@ -405,7 +405,7 @@ class TestOrdinalArithmetic(unittest.TestCase):
         # - caching the VNF comparator results with functools.lru_cache
         # ... and found no improvement
         # perhaps the cause is more subtle?
-        Ns = (0, 1, 2, 4, 7)
+        Ns = (0, 1, 2, 4, 7, 19)
         # test the ordering is correct
         for A,B in zip(As,As[1:]):
             self.assertTrue(A < B)
