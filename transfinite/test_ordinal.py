@@ -8,8 +8,17 @@ import warnings
 import unittest
 
 class TestBisectedFunctions(unittest.TestCase):
+    """
+    Test battery for the 'bisected' versions of utility functions.
+    They are expected to do the same thing with better performance
+    for certain kinds of inputs.
+    """
     
     def test_reduce(self):
+        """
+        Tests the bisected version of 'reduce'
+        against the original from functools
+        """
         from ordinal import reduce_bisected
         from functools import reduce
         from random import randint
@@ -63,6 +72,10 @@ class TestBisectedFunctions(unittest.TestCase):
                 )
             
     def test_sum(self):
+        """
+        Tests the bisected version of 'sum'
+        against the original in the builtins
+        """
         from ordinal import sum_bisected
         from random import randint
 
@@ -79,8 +92,18 @@ class TestBisectedFunctions(unittest.TestCase):
                 )
 
 class TestOrdinalClass(unittest.TestCase):
+    """
+    Test battery focused on the ordinal number class
+    and its basic functionality.
+    """
 
     def test_integers(self):
+        """
+        Sanity tests involving ordinals that are mathematically
+        integers and the builtin int objects.
+        Since integers are very straightforward and cheap to
+        test with, we do a lot of the low level sanity checks here.
+        """
         from ordinal import ordinal, ordinal_type
 
         for i in range(100):
@@ -137,6 +160,10 @@ class TestOrdinalClass(unittest.TestCase):
             ordinal(0.5)
 
     def test_constants(self):
+        """
+        Small test case to ensure all the provided constants,
+        such as omega, are actually the ordinals they're supposed to be.
+        """
         from ordinal import ordinal, omega, epsilon_0, zeta_0
 
         self.assertEqual(omega, ordinal('omega'))
@@ -148,8 +175,17 @@ class TestOrdinalClass(unittest.TestCase):
         self.assertTrue(epsilon_0 < zeta_0)
 
 class TestOrdinalArithmetic(unittest.TestCase):
+    """
+    Test battery focused around ordinal operations.
+    """
 
     def test_addition(self):
+        """
+        Tests ordinal addition, both directly
+        against test vectors and with mathematical expectations.
+        Can't reach omega^2 without multiplication, so stays
+        below omega^2.
+        """
         from ordinal import omega
 
         self.assertTrue(omega + 1 > omega)
@@ -166,6 +202,11 @@ class TestOrdinalArithmetic(unittest.TestCase):
         self.assertTrue(omega + omega + omega + omega == (omega + omega) + (omega + omega))
 
     def test_addition_veblen(self):
+        """
+        Extra tests on ordinal addition,
+        now including ordinals in the Veblen hierarchy.
+        These are 'harder' than the more basic test case.
+        """
         from ordinal import omega, epsilon_0, veblen
 
         # more tests at the veblen hierarchy
@@ -180,6 +221,12 @@ class TestOrdinalArithmetic(unittest.TestCase):
         self.assertTrue(epsilon_0 + A < epsilon_0 + epsilon_0)
 
     def test_multiplication(self):
+        """
+        Tests ordinal multiplication, both directly
+        against test vectors and with mathematical expectations.
+        Can't reach omega^omega without exponentiation,
+        so all values are below omega^omega.
+        """
         from ordinal import omega
 
         self.assertTrue(omega * 2 > omega)
@@ -203,6 +250,10 @@ class TestOrdinalArithmetic(unittest.TestCase):
         self.assertTrue(A * A * A == A * (A * A))
 
     def test_multiplication_veblen(self):
+        """
+        Harder test case for ordinal multiplication, which involves
+        ordinals drawn from within the Veblen hierarchy.
+        """
         from ordinal import omega, epsilon_0, veblen
         # go harder! use veblen
 
@@ -219,6 +270,12 @@ class TestOrdinalArithmetic(unittest.TestCase):
         self.assertTrue(epsilon_0 * 2 * omega * 2 == veblen(0, epsilon_0 + 1) * 2)
 
     def test_power(self):
+        """
+        Test ordinal powers/exponentiation against test vectors
+        and mathematical expectations.
+        Already includes ordinals from the Veblen hierarchy,
+        so this way we can test the fixed points and such.
+        """
         from ordinal import ordinal, omega, epsilon_0, veblen
 
         # test integer cases work as expected
@@ -296,6 +353,10 @@ class TestOrdinalArithmetic(unittest.TestCase):
         self.assertTrue(epsilon_0 ** omega == omega ** omega ** (epsilon_0 + 1))
 
     def test_veblen(self):
+        """
+        Test case specifically for the Veblen function
+        and its behaviour.
+        """
         from ordinal import veblen, omega, epsilon_0, zeta_0
 
         self.assertTrue(omega == veblen(0, 1))
@@ -334,6 +395,14 @@ class TestOrdinalArithmetic(unittest.TestCase):
         self.assertTrue(veblen(towers[2], towers[1]) > veblen(towers[1], towers[2]))
 
     def test_fundamental_sequence(self):
+        """
+        Test case that takes fundamental sequences of ordinals
+        and checks to make sure they're sane.
+        There's not much of a point testing against test vectors,
+        since fundamental sequences can be chosen differently without
+        breaking the math about ordinals. In fact, from just an ordinal,
+        nothing is implied about what its fundamental sequence 'should' be.
+        """
         from ordinal import veblen, omega, epsilon_0, zeta_0, kind, kind_limit
 
         # lots of increasing ones!
@@ -395,16 +464,6 @@ class TestOrdinalArithmetic(unittest.TestCase):
         # and some integers
         # note: the A[19] < A[20] test is a good way to check that the comparison is efficient
         # since the fundamental sequence values tend to increase in complexity with n
-        # the higher index tests are being excluded for now on grounds of blowing up the comparison functions
-        # the exact cause is not known, but it is hypothesized that something is causing
-        # the comparison to be run at least twice per tree depth,
-        # so it degenerates to O(2^n) or worse.
-        # preliminary testing changed the following:
-        # - using hashes to shortcut equality
-        # - writing a custom tuple comparator to prevent duplicate comparisons within the VNF comparator
-        # - caching the VNF comparator results with functools.lru_cache
-        # ... and found no improvement
-        # perhaps the cause is more subtle?
         Ns = (0, 1, 2, 4, 7, 19)
         # test the ordering is correct
         for A,B in zip(As,As[1:]):
@@ -426,6 +485,65 @@ class TestOrdinalArithmetic(unittest.TestCase):
                         passed = True
                         break
                 self.assertTrue(passed)
+
+    def test_deep_comparison_veblen_2(self):
+        """
+        Very deep/complex ordinals have previously been a performance issue,
+        having runtime exponential in the depth.
+        This was spotted by the fundamental sequence test.
+        Let's test to make sure that issue isn't happening again.
+
+        More specifically, this tests deep expressions of the form
+        phi_A(phi_A(...(B)...))
+        which differ only in B, and expects that the test completes in
+        time linear to the depth. If it's not linear time, we have issues.
+        """
+        from ordinal import veblen
+
+        # this was originally going to go up to 100,
+        # but that exceeds CPython's default recursion depth limit
+        for hardness in range(1,50,5):
+
+            # test the classic example
+            A = veblen(1,1)[hardness]
+            B = veblen(1,1)[hardness+1]
+
+            self.assertTrue(A < B)
+
+            # test a different example
+            A = veblen(1,0) + 1
+            for B in (
+                A + 1,
+                A * 2,
+                A * A
+                ):
+                
+                modA = A
+                modB = B
+                
+                for _ in range(hardness):
+                    modA = veblen(0, modA)
+                    modB = veblen(0, modB)
+                    
+                self.assertTrue(modA < modB)
+                
+                # also check if it's handled well as a higher
+                modA = veblen(modA, 1)
+                modB = veblen(modB, 0)
+                self.assertTrue(modA < modB)
+
+            # somewhat harder test, using different fixed points
+            A = veblen(3,1)+1
+            B = veblen(3,2)+1
+                
+            modA = A
+            modB = B
+            
+            for _ in range(hardness):
+                modA = veblen(2, modA)
+                modB = veblen(1, modB)
+
+            self.assertTrue(modA < modB)
 
 if __name__ == '__main__':
     unittest.main()

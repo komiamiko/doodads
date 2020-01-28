@@ -28,16 +28,10 @@ def cmp(x, y):
     Otherwise it will use == and < to determine the order.
     """
     # try to call x's cmp
-    try:
-        return x.__cmp__(y)
-    except AttributeError:
-        pass
+    if hasattr(x,'__cmp__'):return x.__cmp__(y)
     # maybe y implements cmp?
     # this is like the reverse operations
-    try:
-        return - y.__cmp__(x)
-    except AttributeError:
-        pass
+    if hasattr(y,'__cmp__'):return -y.__cmp__(x)
     # well neither of them have it
     # do we specialize for any types?
     if isinstance(x, tuple) and isinstance(y, tuple) or \
@@ -321,13 +315,17 @@ class ordinal(ordinal_type):
         self._cnf = _cnf
         self._vnf = _vnf
         # Precompute the hash
-        # long width hash
-        _hash = list(map(hash, (
-            self._nat,
-            tuple(self._cnf),
-            tuple(self._vnf)
-            )))
-        self._hash = _long_hash(_hash)
+        if self._cnf or self._vnf:
+            # long width hash
+            _hash = list(map(hash, (
+                self._nat,
+                tuple(self._cnf),
+                tuple(self._vnf)
+                )))
+            self._hash = _long_hash(_hash)
+        else:
+            # match the integer
+            self._hash = self._nat
         # Precompute the kind
         if self._nat == 0:
             if self._cnf or self._vnf:
