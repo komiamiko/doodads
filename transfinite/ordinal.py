@@ -1045,25 +1045,35 @@ def fast_growing_hierarchy(sub, value, limit_steps=None, limit_complexity=1.0, c
                 n += lcount
             elif lsub == 1:
                 times = min(lcount, bin_log(10**6//n))
-                if times == 0:break
+                if times == 0:
+                    li.append((lsub, lcount))
+                    break
                 n *= 2**times
                 lcount -= times
                 add_func((lsub, lcount))
             elif lsub == 2:
-                if n > 16:break
+                if n > 16:
+                    li.append((lsub, lcount))
+                    break
                 n = 2**n * n
                 lcount -= 1
                 add_func((lsub, lcount))
         elif kind(lsub) == kind_successor:
-            if (lsub > 4 if lsub < omega else lsub._nat > 2):break
+            if (lsub > 4 if lsub < omega else lsub._nat > 2):
+                li.append((lsub, lcount))
+                break
             lcount -= 1
             add_func((lsub, lcount))
             add_func((predecessor(lsub), n))
         else:
             if lsub >= veblen(3, 0) and n > 1 + limit_complexity or \
-               lsub >= epsilon_0 and n > 2 + limit_complexity:break
+               lsub >= epsilon_0 and n > 2 + limit_complexity:
+                li.append((lsub, lcount))
+                break
             nx = lsub[n]
-            if complexity(nx) >= 30 * limit_complexity:break
+            if complexity(nx) >= 30 * limit_complexity:
+                li.append((lsub, lcount))
+                break
             lcount -= 1
             add_func((lsub, lcount))
             add_func((nx, 1))
