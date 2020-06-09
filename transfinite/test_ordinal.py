@@ -394,6 +394,107 @@ class TestOrdinalArithmetic(unittest.TestCase):
         self.assertTrue(veblen(epsilon_0, towers[2] + 1) > towers[2])
         self.assertTrue(veblen(towers[2], towers[1]) > veblen(towers[1], towers[2]))
 
+    def test_left_subtraction(self):
+        """
+        Test left subtraction for correctness and erroring.
+        Assumes addition and veblen have been
+        tested already and are OK.
+        """
+        import itertools
+        from ordinal import ordinal, veblen, omega
+        import random
+        
+        # do a few test vectors as a fixed reference
+        self.assertEqual(ordinal(2) - 0, 2)
+        self.assertEqual(ordinal(2) - ordinal(0), 2)
+        self.assertEqual(ordinal(2) - 1, 1)
+        self.assertEqual(ordinal(5) - ordinal(2), 3)
+        self.assertEqual(3 - ordinal(0), 3)
+        self.assertEqual(3 - ordinal(1), 2)
+        self.assertEqual(3 - ordinal(3), 0)
+        self.assertEqual(ordinal(3) - ordinal(3), 0)
+        self.assertEqual(omega - omega, 0)
+        self.assertEqual(omega - 1, omega)
+        self.assertEqual(omega + 1 - 1, omega + 1)
+        self.assertEqual(omega + 1 - omega, 1)
+        self.assertEqual(omega + omega - 1, omega + omega)
+        self.assertEqual(omega + omega - omega, omega)
+        self.assertEqual(veblen(0, 2) - omega, veblen(0, 2))
+        self.assertEqual(veblen(0, 2) + 1 - (omega + 1), veblen(0, 2) + 1)
+        self.assertEqual(veblen(0, 2) + 1 - omega, veblen(0, 2) + 1)
+        self.assertEqual(veblen(0, 2) + omega - omega, veblen(0, 2) + omega)
+        self.assertEqual(veblen(1, 0) - omega, veblen(1, 0))
+        self.assertEqual(veblen(2, 0) + veblen(2, 0) + veblen(1, 2) - \
+                         1,
+                         veblen(2, 0) + veblen(2, 0) + veblen(1, 2))
+        self.assertEqual(veblen(2, 0) + veblen(2, 0) + veblen(1, 2) - \
+                         omega,
+                         veblen(2, 0) + veblen(2, 0) + veblen(1, 2))
+        self.assertEqual(veblen(2, 0) + veblen(2, 0) + veblen(1, 2) - \
+                         (veblen(1, 4) + veblen(1, 3)),
+                         veblen(2, 0) + veblen(2, 0) + veblen(1, 2))
+        self.assertEqual(veblen(2, 0) + veblen(2, 0) + veblen(1, 2) - \
+                         (veblen(2, 0) + veblen(1, 3) + omega + 1),
+                         veblen(2, 0) + veblen(1, 2))
+        self.assertEqual(veblen(2, 0) + veblen(2, 0) + veblen(1, 2) - \
+                         (veblen(2, 0) + veblen(2, 0) + omega + 1),
+                         veblen(1, 2))
+        self.assertEqual(veblen(2, 0) + veblen(2, 0) + veblen(1, 2) - \
+                         (veblen(2, 0) + veblen(2, 0) + veblen(1, 2)),
+                         0)
+        
+        # and some invalid cases
+        for a, b in [
+            (1, ordinal(2)),
+            (1, omega),
+            (omega, omega + 1),
+            (omega + omega, veblen(0, 2)),
+            (veblen(0, 4) + veblen(0, 2) + veblen(0, 1), veblen(0, 4) + veblen(0, 3)),
+            (omega, veblen(1, 0)),
+            (veblen(1, 0) + 1, veblen(1, 0) + omega),
+            (veblen(1, 2) + veblen(1, 1) + veblen(1, 0), veblen(1, 3)),
+            ]:
+            with self.assertRaises(ValueError):
+                _ = a - b
+        
+        # the rest are generated combinations of some ordinals
+        # be careful about adding more things to this pool, since
+        # the recombined pool can get quite large
+        base_pool = [
+            veblen(veblen(1,0),0),
+            veblen(veblen(0,1),0),
+            veblen(2,0),
+            veblen(1,veblen(0,1)),
+            veblen(1,1),
+            veblen(0,veblen(1,0)+1),
+            veblen(1,0), # vnf lowest
+            veblen(0,veblen(0,1)+veblen(0,1)),
+            veblen(0,veblen(0,1)+1),
+            veblen(0,veblen(0,1)),
+            veblen(0,3),
+            veblen(0,2),
+            veblen(0,1), # cnf lowest
+            1, # nat
+            0, # helpful to make shorter sums
+            ]
+        recombine_pool = list(map(sum,
+                                  itertools.combinations_with_replacement(
+                                      base_pool, 4)
+                                  ))
+        # depending on pool size, do random or all
+        max_iterations = 100000
+        if len(recombine_pool)**2 > max_iterations:
+            pairs = (random.sample(recombine_pool, 2) for _ in range(max_iterations))
+        else:
+            pairs = itertools.product(*[recombine_pool]*2)
+        for a, b in pairs:
+            if a < b:
+                with self.assertRaises(ValueError):
+                    _ = a - b
+            else:
+                c = a - b
+                self.assertEqual(b + c, a)
+
     def test_fundamental_sequence(self):
         """
         Test case that takes fundamental sequences of ordinals

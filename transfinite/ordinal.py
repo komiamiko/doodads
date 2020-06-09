@@ -588,6 +588,91 @@ class ordinal(ordinal_type):
         return ordinal(_nat = rnat, _cnf = rcnf, _vnf = rvnf)
     def __radd__(self, other):
         return ordinal(other) + self
+    def __sub__(self, other):
+        """
+        Left subtraction:
+        A - B = C
+        such that
+        B + C = A
+        Requires A >= B
+        C is always unique.
+        """
+        if self < other:
+            raise ValueError('Cannot left subtract an ordinal from a smaller ordinal')
+        # is it an integer?
+        if isinstance(other, int):
+            # higher tiers will always eat a number
+            if self._vnf or self._cnf:
+                return self
+            # regular integer subtraction
+            return self._nat - other
+        # it's type ordinal, but may still be below omega, we don't know
+        # scan terms of A and build the difference
+        # at some point A may have a big term that B doesn't match
+        # in that case, all later terms of B will just get wiped
+        # note logic gets simplified a lot since we assume already A >= B
+        wipe = False
+        optr = 0
+        rvnf = []
+        for sv in self._vnf:
+            # B ran out of terms, wipe rest
+            if not wipe and optr >= len(other._vnf):
+                wipe = True
+            # if wipe, B doesn't matter
+            if wipe:
+                rvnf.append(sv)
+                continue
+            # grab term from B
+            ov = other._vnf[optr]
+            # increment pointer
+            optr += 1
+            # term matches ignoring coefficient?
+            if sv[0:2] == ov[0:2]:
+                # bigger coefficient means we add and the rest is wiped
+                if sv[2] > ov[2]:
+                    wipe = True
+                    rvnf.append((sv[0], sv[1], sv[2] - ov[2]))
+                # otherwise, they cancel out
+                continue
+            # we already assumed A >= B, so if they're not equal, A's must be larger
+            # wipe the rest and append this one
+            wipe = True
+            rvnf.append(sv)
+            continue
+        # scan through CNF and do the same thing
+        optr = 0
+        rcnf = []
+        for sc in self._cnf:
+            # B ran out of terms, wipe rest
+            if not wipe and optr >= len(other._cnf):
+                wipe = True
+            # if wipe, B doesn't matter
+            if wipe:
+                rcnf.append(sc)
+                continue
+            # grab term from B
+            oc = other._cnf[optr]
+            # increment pointer
+            optr += 1
+            # term matches ignoring coefficient?
+            if sc[0] == oc[0]:
+                # bigger coefficient means we add and the rest is wiped
+                if sc[1] > oc[1]:
+                    wipe = True
+                    rcnf.append((sc[0], sc[1] - oc[1]))
+                # otherwise, they cancel out
+                continue
+            # we already assumed A >= B, so if they're not equal, A's must be larger
+            # wipe the rest and append this one
+            wipe = True
+            rcnf.append(sc)
+            continue
+        # take nat if not wiped
+        rnat = self._nat if wipe else (self._nat - other._nat)
+        # construct new ordinal
+        return ordinal(_nat = rnat, _cnf = rcnf, _vnf = rvnf)
+    def __rsub__(self, other):
+        return ordinal(other) - self
     def __mul__(self, other):
         """
         Product of 2 ordinal numbers.
