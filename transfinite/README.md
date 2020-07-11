@@ -10,6 +10,11 @@ Relevant files:
 
 - `ordinal.py` - library for working with ordinals up to the Feferman–Schütte ordinal (usually denoted **φ(1, 0, 0)** or **Γ₀**). Includes comparison, arithmetic, 2-argument Veblen function, fundamental sequences, and fast growing hierarchy expander.
 
+Alternatives:
+
+* [OrdinalArithmetic.py](https://web.mit.edu/dmytro/www/other/OrdinalArithmetic.py)
+by Dmytro Taranovsky. Not exactly the same features, but the underlying notation is highly uniform and reaches a much higher ordinal (just how large is not currently known). If you expect to need **Γ₀** or above, consider using this file and working in that notation.
+
 ## Introduction to ordinals
 
 ### What is an ordinal?
