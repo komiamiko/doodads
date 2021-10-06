@@ -165,4 +165,6 @@ dmypy.json
 *.out
 *.app
 
-
+# Custom
+fair_sharing/*.fs
+fair_sharing/mnp.txt
