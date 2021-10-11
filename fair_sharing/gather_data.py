@@ -5,10 +5,27 @@ of repeated substrings or other analysis later.
 """
 
 import argparse
+import datetime
 import os
 import struct
 import subprocess
 import time
+
+def safe_write_ab(fn, data):
+    """
+    Append to a file. If it fails, wait and try again.
+    """
+    success = False
+    failcount = 0
+    while not success:
+        try:
+            with open(fn, 'ab') as file:
+                file.write(data)
+            success = True
+        except:
+            failcount += 1
+            if failcount % 100 == 0:
+                print(f'Failed {failcount} times to write to {fn}')
 
 def _fair_sharing_array(n=3, degree=2, limit=10**6, use_numpy=False):
     """
@@ -110,6 +127,7 @@ def remove_if_exists(fp):
 
 def main_root(args):
     # clear log files
+    print('Cleaning up old files...')
     remove_if_exists('mnp.txt')
     for i in range(3, args.n+1):
         if not remove_if_exists(f'{i}.fs'):
@@ -124,17 +142,17 @@ def main_root(args):
             '-l', str(args.elements_to_log)])
         subs.append((i, sub))
     # periodically update
-    total_time_elapsed = 0
+    start_time = datetime.datetime.utcnow()
+    interval = 1.0
     while subs:
         for i in range(len(subs))[::-1]:
             n, sub = subs[i]
             if sub.poll() is not None:
                 print(f'n={n} completed')
                 subs.pop(i)
-        interval = 1 if total_time_elapsed < 10 else 10 if total_time_elapsed < 300 else 60
         time.sleep(interval)
-        total_time_elapsed += interval
-        print(f'{total_time_elapsed} seconds elapsed')
+        interval = min(interval * 1.01, 600)
+        print(f'{datetime.datetime.utcnow() - start_time} elapsed')
 
 def main_single(args):
     # compute!
@@ -143,12 +161,10 @@ def main_single(args):
     for _ in range(args.elements_to_log):
         buf.append(next(gen))
         if len(buf) >= args.block_size:
-            with open(f'{args.n}.fs', 'ab') as file:
-                file.write(struct.pack(f'{len(buf)}B', *buf))
+            safe_write_ab(f'{args.n}.fs', struct.pack(f'{len(buf)}B', *buf))
             buf = []
     if buf:
-        with open(f'{args.n}.fs', 'ab') as file:
-            file.write(struct.pack(f'{len(buf)}B', *buf))
+        safe_write_ab(f'{args.n}.fs', struct.pack(f'{len(buf)}B', *buf))
     for _ in range(args.elements_to_compute - args.elements_to_log):
         _ = next(gen)
 
